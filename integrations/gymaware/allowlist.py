@@ -76,3 +76,26 @@ def athlete_reference_allowlist() -> set[int]:
     """Convenience: only the GymAware athleteReference IDs."""
     _, refs = load_athlete_references_from_xlsx()
     return refs
+
+
+def env_use_allowlist() -> bool:
+    """True when GYMAWARE_USE_ALLOWLIST is 1/true/yes/on (export + upload respect this)."""
+    v = os.getenv("GYMAWARE_USE_ALLOWLIST", "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+def filter_rows_by_athlete_reference(
+    rows: list[dict[str, Any]],
+    allow: set[int],
+) -> list[dict[str, Any]]:
+    """Keep API rows whose athleteReference is in allow (GymAware camelCase)."""
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        ar = row.get("athleteReference")
+        try:
+            ar_int = int(ar) if ar is not None else None
+        except (TypeError, ValueError):
+            continue
+        if ar_int is not None and ar_int in allow:
+            out.append(row)
+    return out

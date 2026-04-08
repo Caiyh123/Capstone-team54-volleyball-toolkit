@@ -8,9 +8,11 @@ Configure via .env or CLI:
   GYMAWARE_EXPORT_START=2026-01-01
   GYMAWARE_EXPORT_END=2026-01-31
   GYMAWARE_INCLUDE_REPS=0   # set 1 to also write gymaware_reps_export.json
+  GYMAWARE_USE_ALLOWLIST=1  # optional: filter to workbook IDs (see integrations/gymaware/allowlist.py)
 
 Run: python gymaware_export.py
       python gymaware_export.py --start 2026-03-01 --end 2026-03-28
+      python gymaware_export.py --allowlist
 """
 from __future__ import annotations
 
@@ -26,6 +28,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from integrations.gymaware.allowlist import (
+    env_use_allowlist,
+    filter_rows_by_athlete_reference,
+    load_athlete_references_from_xlsx,
+)
 from integrations.gymaware.client import GymAwareClient
 
 # Stay under GymAware "max 1 month per request" guidance
@@ -114,6 +121,17 @@ def main() -> int:
         default=1.0,
         help="Seconds between chunk requests (default: 1)",
     )
+    al = parser.add_mutually_exclusive_group()
+    al.add_argument(
+        "--allowlist",
+        action="store_true",
+        help="Filter rows to athlete IDs in the allowlist workbook (see GYMAWARE_ALLOWLIST_XLSX)",
+    )
+    al.add_argument(
+        "--no-allowlist",
+        action="store_true",
+        help="Do not filter by allowlist (overrides GYMAWARE_USE_ALLOWLIST in .env)",
+    )
     args = parser.parse_args()
 
     start_s = args.start or os.getenv("GYMAWARE_EXPORT_START", "").strip()
@@ -127,6 +145,13 @@ def main() -> int:
         "true",
         "yes",
     )
+
+    if args.no_allowlist:
+        use_allowlist = False
+    elif args.allowlist:
+        use_allowlist = True
+    else:
+        use_allowlist = env_use_allowlist()
 
     try:
         start_ts, end_ts = range_to_unix_pair(start_s, end_s)
@@ -149,12 +174,31 @@ def main() -> int:
     print(f"[INFO] GymAware export UTC range (inclusive dates): {start_s} .. {end_s}")
     print(f"[INFO] {len(windows)} API chunk(s) (max ~{CHUNK_DAYS} days each)\n")
 
+    allow_refs: set[int] | None = None
+    if use_allowlist:
+        try:
+            _, allow_refs = load_athlete_references_from_xlsx()
+        except FileNotFoundError as e:
+            print(f"[ERROR] Allowlist enabled but workbook missing: {e}")
+            return 1
+        if not allow_refs:
+            print("[ERROR] Allowlist enabled but workbook contains no athlete IDs.")
+            return 1
+
     summaries = export_resource(
         "summaries",
         client.list_summaries,
         windows,
         args.pause,
     )
+    if use_allowlist and allow_refs is not None:
+        before = len(summaries)
+        summaries = filter_rows_by_athlete_reference(summaries, allow_refs)
+        print(
+            f"[INFO] Allowlist filter: {len(summaries)} summary row(s) kept "
+            f"(from {before} before filter)"
+        )
+
     with open(SUMMARIES_OUT, "w", encoding="utf-8") as f:
         json.dump(summaries, f, indent=2)
     print(f"\n[SUCCESS] Wrote {len(summaries)} summary row(s) to {SUMMARIES_OUT}")
@@ -166,6 +210,13 @@ def main() -> int:
             windows,
             args.pause,
         )
+        if use_allowlist and allow_refs is not None:
+            before_r = len(reps)
+            reps = filter_rows_by_athlete_reference(reps, allow_refs)
+            print(
+                f"[INFO] Allowlist filter: {len(reps)} rep row(s) kept "
+                f"(from {before_r} before filter)"
+            )
         with open(REPS_OUT, "w", encoding="utf-8") as f:
             json.dump(reps, f, indent=2)
         print(f"[SUCCESS] Wrote {len(reps)} rep row(s) to {REPS_OUT}")

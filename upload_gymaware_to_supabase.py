@@ -18,7 +18,14 @@ import psycopg2
 from dotenv import load_dotenv
 from psycopg2.extras import Json
 
+from integrations.gymaware.allowlist import (
+    env_use_allowlist,
+    filter_rows_by_athlete_reference,
+    load_athlete_references_from_xlsx,
+)
+
 load_dotenv()
+
 DB_URL = os.getenv("DATABASE_URL")
 FILE_PATH = os.getenv("GYMAWARE_EXPORT_FILE", "gymaware_summaries_export.json")
 
@@ -131,6 +138,19 @@ def main() -> None:
         return
 
     print(f"[INFO] Loaded {len(data)} row(s) from {FILE_PATH}")
+
+    if env_use_allowlist():
+        try:
+            _, allow_refs = load_athlete_references_from_xlsx()
+        except FileNotFoundError as e:
+            print(f"[ERROR] GYMAWARE_USE_ALLOWLIST=1 but allowlist file missing: {e}")
+            return
+        if not allow_refs:
+            print("[ERROR] Allowlist enabled but workbook contains no athlete IDs.")
+            return
+        before = len(data)
+        data = filter_rows_by_athlete_reference(data, allow_refs)
+        print(f"[INFO] Allowlist: {len(data)} / {before} row(s) retained for upload.")
 
     ok = 0
     skipped = 0

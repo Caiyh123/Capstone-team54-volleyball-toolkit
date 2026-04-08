@@ -1,7 +1,9 @@
 # Scheduled sync: Catapult + GymAware -> Supabase (add steps when more sources exist).
-# Task Scheduler: Action = powershell.exe -ExecutionPolicy Bypass -File "D:\...\Volley\scripts\run_scheduled_sync.ps1"
+# Task Scheduler example:
+#   powershell.exe -ExecutionPolicy Bypass -File "D:\...\Capstone-team54-volleyball-toolkit\scripts\run_scheduled_sync.ps1"
 #
-# Needs: Python on PATH, .env in repo root (CATAPULT_*, GYMAWARE_*, DATABASE_URL).
+# Needs: Python on PATH (or edit script to use full path to python.exe), .env in repo root
+#        (CATAPULT_*, GYMAWARE_*, DATABASE_URL). Optional: GYMAWARE_USE_ALLOWLIST=1 + allowlist workbook.
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
