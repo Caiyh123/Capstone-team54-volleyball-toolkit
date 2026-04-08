@@ -208,6 +208,7 @@ __marimo__/
 
 # Environment and local config
 .env.*
+!.env.example
 *.env
 
 # IDE / OS files
@@ -216,3 +217,12 @@ __marimo__/
 
 # Frontend / Node files
 node_modules/
+
+# Volleyball ETL — local exports and logs (do not commit)
+catapult_bulk_export.json
+gymaware_summaries_export.json
+gymaware_reps_export.json
+load_index_result.json
+jump_spreadsheet.xlsx
+exports/
+logs/
