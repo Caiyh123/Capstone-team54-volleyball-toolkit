@@ -15,7 +15,7 @@ from typing import Any
 import psycopg2
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from psycopg2.extras import Json
 
 from integrations.whoop.oauth import (
@@ -27,6 +27,16 @@ from integrations.whoop.oauth import (
 load_dotenv()
 
 app = FastAPI(title="Volleyball toolkit — WHOOP Auth Bridge", version="0.1.0")
+
+
+@app.get("/")
+def root() -> dict[str, str]:
+    """Avoid bare 404 when someone opens the service URL in a browser."""
+    return {
+        "service": "WHOOP Auth Bridge",
+        "health": "/health",
+        "whoop_start": "/whoop/start?state=<8+ chars>",
+    }
 
 
 def _req_whoop() -> tuple[str, str, str]:
@@ -102,6 +112,12 @@ def _upsert_token_row(
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.head("/health")
+def health_head() -> Response:
+    """Some uptime tools use HEAD; default GET-only would return 405."""
+    return Response(status_code=200)
 
 
 @app.get("/whoop/start")
