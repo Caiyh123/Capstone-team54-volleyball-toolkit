@@ -36,6 +36,24 @@ def root() -> dict[str, str]:
         "service": "WHOOP Auth Bridge",
         "health": "/health",
         "whoop_start": "/whoop/start?state=<8+ chars>",
+        "oauth_check": "/whoop/oauth-check",
+    }
+
+
+@app.get("/whoop/oauth-check")
+def whoop_oauth_check() -> dict[str, str]:
+    """Exact redirect_uri sent to WHOOP — must match Developer Dashboard (fixes invalid_request)."""
+    cid = os.getenv("WHOOP_CLIENT_ID", "").strip()
+    redir = os.getenv("WHOOP_REDIRECT_URI", "").strip()
+    if not cid or not redir:
+        raise HTTPException(
+            status_code=503,
+            detail="WHOOP_CLIENT_ID or WHOOP_REDIRECT_URI missing.",
+        )
+    return {
+        "redirect_uri": redir,
+        "client_id_prefix": cid[:12] + ("…" if len(cid) > 12 else ""),
+        "hint": "Copy redirect_uri into WHOOP app → Redirect URIs (same string, no extra spaces).",
     }
 
 
