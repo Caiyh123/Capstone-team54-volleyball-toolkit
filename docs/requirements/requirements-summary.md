@@ -12,6 +12,7 @@ Build a **headless data pipeline** that ingests vendor performance data (Catapul
 | **GymAware Cloud** | Export summaries (optional reps); upload to Postgres; **optional allowlist** filtering via workbook for roster/privacy scope. |
 | **Verification** | `verify_integrations.py` confirms configured APIs respond. |
 | **Scheduling** | Windows: `scripts/run_scheduled_sync.ps1` + Task Scheduler (see `docs/operations/runbook.md`). |
+| **WHOOP (initial)** | FastAPI **Auth Bridge** (`backend/app.py`) + `schema/whoop_oauth_tokens.sql` + `integrations/whoop/oauth.py` — OAuth callback stores tokens; **nightly ETL** to metrics tables is a follow-up. |
 | **Identity** | Schema for **athlete crosswalk** (`schema/athlete_identity.sql`); population is a separate data task with the client. |
 | **Documentation** | Runbook, `.env.example`, integration notes under `docs/volley-etl/`. |
 

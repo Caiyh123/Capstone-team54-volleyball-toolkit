@@ -1,0 +1,29 @@
+# Render Blueprint — WHOOP Auth Bridge (FastAPI).
+# New Blueprint: https://dashboard.render.com/blueprints → New Blueprint Instance → select this repo.
+# After first deploy, copy the service URL and set WHOOP_REDIRECT_URI + WHOOP dashboard to:
+#   https://<service-name>.onrender.com/callback
+
+services:
+  - type: web
+    name: whoop-auth-bridge
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      # Set these in the dashboard when prompted (sync: false), or after deploy.
+      - key: WHOOP_CLIENT_ID
+        sync: false
+      - key: WHOOP_CLIENT_SECRET
+        sync: false
+      # Must equal https://<this-service>.onrender.com/callback (use your real hostname)
+      - key: WHOOP_REDIRECT_URI
+        sync: false
+      # Supabase Postgres connection string (Session mode / pooler ok if SSL params match)
+      - key: DATABASE_URL
+        sync: false
+      # Optional — override default scopes (space-separated)
+      # - key: WHOOP_SCOPES
+      #   sync: false

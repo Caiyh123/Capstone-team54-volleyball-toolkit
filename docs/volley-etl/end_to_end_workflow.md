@@ -118,6 +118,9 @@ WHOOP                 →     ① One-time: athlete clicks link (browser)
 ## Files in this repo (reference)
 
 - `scripts/run_scheduled_sync.ps1` — Catapult + GymAware chain.  
+- `backend/app.py` — WHOOP Auth Bridge (FastAPI): `/health`, `/whoop/start`, `/callback`.  
+- `integrations/whoop/oauth.py` — WHOOP authorize URL + token exchange + profile `user_id`.  
+- `schema/whoop_oauth_tokens.sql` — persist refresh/access tokens after OAuth callback.  
 - `docs/vald_onboarding.md` — VALD reading order.  
 - `docs/whoop_via_teamworks.md` — **historical** note if AMS path was considered; **current plan** is direct WHOOP.  
 - `integrations/gymaware/allowlist.py` — GymAware ID allowlist from Excel.

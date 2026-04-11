@@ -49,20 +49,28 @@ def exchange_authorization_code(
     client_id: str,
     client_secret: str,
 ) -> dict[str, Any]:
-    """POST authorization code for access + refresh tokens."""
+    """POST authorization code for access + refresh tokens.
+
+    WHOOP Postman docs: send client credentials in the request body (not Basic auth).
+    """
+    data: dict[str, str] = {
+        "grant_type": "authorization_code",
+        "code": code.strip(),
+        "redirect_uri": redirect_uri.strip(),
+        "client_id": client_id.strip(),
+        "client_secret": client_secret.strip(),
+    }
     r = requests.post(
         TOKEN_URL,
-        data={
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": redirect_uri,
-            "client_id": client_id,
-            "client_secret": client_secret,
-        },
+        data=data,
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         timeout=60,
     )
-    r.raise_for_status()
+    if not r.ok:
+        detail = (r.text or "")[:800]
+        raise RuntimeError(
+            f"HTTP {r.status_code} from token URL: {detail or r.reason}"
+        )
     return r.json()
 
 

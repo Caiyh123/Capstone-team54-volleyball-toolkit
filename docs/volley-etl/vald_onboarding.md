@@ -44,8 +44,12 @@ Optional for analysts; helps validate metrics before Power BI / warehouse marts.
 
 ## This repo (Volley)
 
-- Placeholders: `integrations/config.py` (`VALD_CLIENT_ID`, `VALD_CLIENT_SECRET`), `.env.example`.
-- When creds arrive: add `integrations/vald/client.py` + export script + Supabase schema (mirror GymAware / Catapult pattern).
+- Config: `integrations/config.py` (`vald_settings()`), `.env.example`.
+- Client: `integrations/vald/client.py` — OAuth client credentials + cached Bearer; `GET /tenants`, `GET /profiles`.
+- Smoke / export: `python vald_export.py` (add `--profiles` to pull profiles per tenant).
+- Schema: `schema/vald_profiles.sql` — staging for External Profiles; product metrics (ForceDecks, etc.) are separate follow-up tables.
+- Load: after SQL is applied, `python upload_vald_profiles_to_supabase.py` (optional `--tenant-id <uuid>`).
+- VA / ForceDecks **entity model** (definitions → tests → trials, keys, CMJ/DJ/IMTP hints): [vald_va_package_notes.md](./vald_va_package_notes.md).
 
 ---
 

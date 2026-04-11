@@ -50,9 +50,35 @@ def whoop_config() -> dict:
 
 
 def vald_config() -> dict:
+    """Minimal VALD OAuth identifiers (see also vald_settings)."""
     return {
         "client_id": os.getenv("VALD_CLIENT_ID", ""),
         "client_secret": os.getenv("VALD_CLIENT_SECRET", ""),
+    }
+
+
+def vald_settings() -> dict[str, str]:
+    """
+    VALD OAuth + regional API bases.
+
+    Defaults target Australia (East) — override for USE/EUW via env or VALD_REGION in docs.
+    """
+    return {
+        "client_id": os.getenv("VALD_CLIENT_ID", "").strip(),
+        "client_secret": os.getenv("VALD_CLIENT_SECRET", "").strip(),
+        "oauth_token_url": os.getenv(
+            "VALD_OAUTH_TOKEN_URL",
+            "https://auth.prd.vald.com/oauth/token",
+        ).strip(),
+        "oauth_audience": os.getenv("VALD_OAUTH_AUDIENCE", "vald-api-external").strip(),
+        "api_base_tenants": os.getenv(
+            "VALD_API_BASE_TENANTS",
+            "https://prd-aue-api-externaltenants.valdperformance.com",
+        ).strip(),
+        "api_base_profile": os.getenv(
+            "VALD_API_BASE_PROFILE",
+            "https://prd-aue-api-externalprofile.valdperformance.com",
+        ).strip(),
     }
 
 

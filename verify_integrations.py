@@ -1,5 +1,5 @@
 """
-Quick check that Catapult + GymAware credentials work (current integration scope).
+Quick check that Catapult + GymAware (+ optional VALD) credentials work.
 
 Run: python verify_integrations.py
 """
@@ -14,6 +14,7 @@ load_dotenv()
 
 from integrations import config
 from integrations.gymaware.client import GymAwareClient
+from integrations.vald.client import ValdClient
 
 
 def check_catapult() -> bool:
@@ -56,19 +57,38 @@ def check_gymaware() -> bool:
     return True
 
 
+def check_vald() -> bool | None:
+    """Returns None if VALD not configured."""
+    if not config.vald_settings()["client_id"]:
+        print("[VALD] SKIP: VALD_CLIENT_ID not set.")
+        return None
+    try:
+        client = ValdClient()
+        tenants = client.list_tenants()
+    except Exception as e:
+        print(f"[VALD] FAIL: {e}")
+        return False
+    n = len(tenants) if isinstance(tenants, list) else 1
+    print(f"[VALD] OK - tenants response received ({n} item(s) if list).")
+    return True
+
+
 def main() -> int:
-    print("Verifying active integrations (Catapult + GymAware)...\n")
+    print("Verifying integrations (Catapult + GymAware; VALD if configured)...\n")
     c = check_catapult()
     g = check_gymaware()
+    v = check_vald()
     print()
-    if c and g:
-        print("All configured sources responded successfully.")
-        return 0
-    if not c and not g:
-        print("Neither source is fully configured; check .env against .env.example.")
+    if not c or not g:
+        print("Catapult/GymAware need attention; check .env against .env.example.")
         return 1
-    print("Partial success — fix the failed source above.")
-    return 1
+    if v is False:
+        return 1
+    if v is None:
+        print("Catapult + GymAware OK. (VALD not configured — optional.)")
+    else:
+        print("Catapult + GymAware + VALD OK.")
+    return 0
 
 
 if __name__ == "__main__":

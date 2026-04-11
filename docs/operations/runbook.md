@@ -53,3 +53,21 @@ Apply SQL in `schema/` via Supabase SQL editor in an agreed order, e.g.:
 ## GymAware allowlist
 
 When `GYMAWARE_USE_ALLOWLIST=1` (or `python gymaware_export.py --allowlist`), only rows whose `athleteReference` appears in the workbook are written to JSON and (for upload) sent to Postgres. Use `--no-allowlist` for a full export regardless of `.env`.
+
+## WHOOP Auth Bridge (FastAPI)
+
+1. In Supabase, run `schema/whoop_oauth_tokens.sql`.
+2. In the WHOOP Developer Dashboard, set the **Redirect URI** to your deployed callback, e.g. `https://<app>.onrender.com/callback` (must match `WHOOP_REDIRECT_URI` in `.env`).
+3. From the **repository root**:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m uvicorn backend.app:app --reload --port 8000
+```
+
+4. **Health:** `GET http://127.0.0.1:8000/health`
+5. **Start OAuth:** open `http://127.0.0.1:8000/whoop/start?state=yourlabel12` (state must be **≥ 8 characters** per WHOOP). After consent, WHOOP redirects to `/callback` and tokens are stored if `DATABASE_URL` is set.
+
+For production, deploy the same app to HTTPS (e.g. Render) and use the public URL in `WHOOP_REDIRECT_URI` and in the WHOOP dashboard.
+
+**Full Render guide:** [deploy-render-whoop-bridge.md](./deploy-render-whoop-bridge.md) (includes `render.yaml` Blueprint).
