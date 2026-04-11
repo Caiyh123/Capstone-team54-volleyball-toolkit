@@ -51,18 +51,22 @@ def exchange_authorization_code(
 ) -> dict[str, Any]:
     """POST authorization code for access + refresh tokens.
 
-    WHOOP Postman docs: send client credentials in the request body (not Basic auth).
+    WHOOP returns ``invalid_client`` / "unsupported authentication method" if
+    ``client_id``/``client_secret`` are only in the form body. Use **HTTP Basic**
+    auth (RFC 6749 §2.3.1): ``Authorization: Basic base64(client_id:client_secret)``,
+    with only ``grant_type``, ``code``, and ``redirect_uri`` in the body.
     """
+    cid = client_id.strip()
+    sec = client_secret.strip()
     data: dict[str, str] = {
         "grant_type": "authorization_code",
         "code": code.strip(),
         "redirect_uri": redirect_uri.strip(),
-        "client_id": client_id.strip(),
-        "client_secret": client_secret.strip(),
     }
     r = requests.post(
         TOKEN_URL,
         data=data,
+        auth=(cid, sec),
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         timeout=60,
     )
