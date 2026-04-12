@@ -19,6 +19,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from psycopg2.extras import Json
 
 from integrations.whoop.oauth import (
+    _clean_oauth_value,
     build_authorize_url,
     exchange_authorization_code,
     fetch_profile_user_id,
@@ -43,9 +44,9 @@ def root() -> dict[str, str]:
 @app.get("/whoop/oauth-check")
 def whoop_oauth_check() -> dict[str, Any]:
     """Exact redirect_uri + sanity checks for WHOOP env (no secrets exposed)."""
-    cid = os.getenv("WHOOP_CLIENT_ID", "").strip()
-    sec = os.getenv("WHOOP_CLIENT_SECRET", "").strip()
-    redir = os.getenv("WHOOP_REDIRECT_URI", "").strip()
+    cid = _clean_oauth_value(os.getenv("WHOOP_CLIENT_ID", ""))
+    sec = _clean_oauth_value(os.getenv("WHOOP_CLIENT_SECRET", ""))
+    redir = _clean_oauth_value(os.getenv("WHOOP_REDIRECT_URI", ""))
     if not cid or not redir:
         raise HTTPException(
             status_code=503,
@@ -62,9 +63,9 @@ def whoop_oauth_check() -> dict[str, Any]:
 
 
 def _req_whoop() -> tuple[str, str, str]:
-    cid = os.getenv("WHOOP_CLIENT_ID", "").strip()
-    sec = os.getenv("WHOOP_CLIENT_SECRET", "").strip()
-    redir = os.getenv("WHOOP_REDIRECT_URI", "").strip()
+    cid = _clean_oauth_value(os.getenv("WHOOP_CLIENT_ID", ""))
+    sec = _clean_oauth_value(os.getenv("WHOOP_CLIENT_SECRET", ""))
+    redir = _clean_oauth_value(os.getenv("WHOOP_REDIRECT_URI", ""))
     if not cid or not sec or not redir:
         raise HTTPException(
             status_code=503,

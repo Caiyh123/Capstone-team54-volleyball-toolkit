@@ -24,6 +24,14 @@ def default_scopes() -> str:
     return os.getenv("WHOOP_SCOPES", DEFAULT_SCOPES).strip() or DEFAULT_SCOPES
 
 
+def _clean_oauth_value(s: str) -> str:
+    """Strip whitespace and UTF-8 BOM from pasted dashboard / Render values."""
+    t = s.strip()
+    if t.startswith("\ufeff"):
+        t = t[1:].strip()
+    return t
+
+
 def build_authorize_url(
     *,
     client_id: str,
@@ -56,10 +64,10 @@ def exchange_authorization_code(
     """
     data: dict[str, str] = {
         "grant_type": "authorization_code",
-        "code": code.strip(),
-        "redirect_uri": redirect_uri.strip(),
-        "client_id": client_id.strip(),
-        "client_secret": client_secret.strip(),
+        "code": _clean_oauth_value(code),
+        "redirect_uri": _clean_oauth_value(redirect_uri),
+        "client_id": _clean_oauth_value(client_id),
+        "client_secret": _clean_oauth_value(client_secret),
     }
     r = requests.post(
         TOKEN_URL,
