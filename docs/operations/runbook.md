@@ -21,8 +21,11 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 4. Smoke test:
 
 ```powershell
+.\.venv\Scripts\python.exe scripts\preflight_config.py
 .\.venv\Scripts\python.exe verify_integrations.py
 ```
+
+`preflight_config.py` reports which variables are set (no secrets). Apply SQL in the order in `schema/apply_order.txt` when bootstrapping Supabase.
 
 Run Python from the **repository root** so `.env` and default paths (e.g. GymAware allowlist Excel) resolve correctly.
 

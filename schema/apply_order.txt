@@ -1,0 +1,12 @@
+Suggested order for Supabase SQL Editor (adjust if tables already exist).
+
+1. catapult_session_metrics.sql
+2. gymaware_summaries.sql
+3. vald_profiles.sql
+4. whoop_oauth_tokens.sql
+5. whoop_staging.sql
+6. athlete_identity.sql
+
+Notes:
+- whoop_staging depends on nothing except Postgres; run after whoop_oauth_tokens if you want related objects grouped.
+- athlete_identity is the roster crosswalk; populate rows after schema exists.

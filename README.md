@@ -19,10 +19,13 @@ Headless ETL pipeline: **Catapult** and **GymAware** → **Supabase (Postgres)**
 3. **Verify** connectivity:
 
    ```powershell
+   .\.venv\Scripts\python.exe scripts\preflight_config.py
    .\.venv\Scripts\python.exe verify_integrations.py
    ```
 
-4. **Database** — run SQL in `schema/` (e.g. `catapult_session_metrics.sql`, `gymaware_summaries.sql`, `athlete_identity.sql`, `vald_profiles.sql`, `whoop_oauth_tokens.sql`, `whoop_staging.sql`) in the Supabase SQL editor as needed.
+   `preflight_config.py` only reports which env vars are set (no secrets). `verify_integrations.py` calls Catapult/GymAware (and VALD if configured).
+
+4. **Database** — run SQL in `schema/` in the Supabase SQL editor. Suggested order: `schema/apply_order.txt`.
 
 ## Repository layout
 

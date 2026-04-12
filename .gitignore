@@ -219,6 +219,7 @@ __marimo__/
 node_modules/
 
 # Volleyball ETL — local exports and logs (do not commit)
+vald_snapshot.json
 catapult_bulk_export.json
 gymaware_summaries_export.json
 gymaware_reps_export.json
