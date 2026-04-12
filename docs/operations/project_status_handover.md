@@ -15,7 +15,7 @@ Snapshot for the team: what is working in the repo, how to run it, and what rema
 ### Catapult
 
 - **Export:** `bulk_export.py` — pulls recent activities and stats → `catapult_bulk_export.json`.
-- **Load:** `upload_to_supabase.py` — upserts into `public.catapult_session_metrics`.
+- **Load:** `upload_to_supabase.py` — **upserts** full `POST /stats` rows into `public.catapult_stats_staging` (`stats_payload` JSONB); still **inserts** narrow metrics into `public.catapult_session_metrics` (legacy). Apply `schema/catapult_stats_staging.sql` in Supabase.
 - **Load index (metric):** `load_index.py` — strain/jump-based load index → `load_index_result.json` (file output; not all metrics are uploaded to a dedicated table unless extended).
 
 ### GymAware

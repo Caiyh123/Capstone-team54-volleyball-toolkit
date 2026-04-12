@@ -41,7 +41,7 @@ Headless ETL pipeline: **Catapult** and **GymAware** → **Supabase (Postgres)**
 
 ## Main Python entrypoints
 
-- Catapult: `bulk_export.py` → `upload_to_supabase.py`
+- Catapult: `bulk_export.py` → `upload_to_supabase.py` (full stats JSONB in `catapult_stats_staging` + narrow `catapult_session_metrics`; apply `schema/catapult_stats_staging.sql`)
 - GymAware: `gymaware_export.py` → `upload_gymaware_to_supabase.py`
 - Load index: `load_index.py`
 - Integration smoke test: `verify_integrations.py`

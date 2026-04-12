@@ -11,10 +11,10 @@ python scripts/catapult_discover.py --write-json
 - **Endpoint:** `POST {base}/stats`
 - **Typical body:** `group_by: ["participating_athlete"]`, `filters: [{ name: "activity_id", comparison: "=", values: [<uuid>] }]`
 - **Returns:** one row per participating athlete for that activity, with **many** numeric/text metric fields (hundreds of keys on typical tenants): distance, player load, velocity bands, IMA counts, heart-rate bands, metabolic power, sport-specific columns, etc.
-- **What we persist today:** only `total_distance`, `total_player_load`, `field_time`, plus `activity_id` / `athlete_id` in `public.catapult_session_metrics` (see `upload_to_supabase.py`).
-- **Database expansion options:**
-  - **Recommended:** new table e.g. `catapult_stats_staging` with `(activity_id, athlete_id)` unique and **`stats_payload JSONB`** storing the full stats row, plus `synced_at`. Lets you add indexes/views later without 400 columns.
-  - **Alternative:** curated subset of metrics as real columns for BI (higher maintenance).
+- **What we persist today:**  
+  - **`public.catapult_stats_staging`** — full stats row as **`stats_payload JSONB`** per `(activity_id, athlete)` (see `schema/catapult_stats_staging.sql`, loaded by `upload_to_supabase.py`). Primary BI source.  
+  - **`public.catapult_session_metrics`** — legacy narrow columns (`total_distance`, `total_player_load`, `field_time`) for backward compatibility; each run still **inserts** new rows (not upserts).
+- **Further expansion:** curated generated columns or views on top of `stats_payload` if BI wants fixed fields without JSON parsing.
 
 ## 2. Sensor data — 10 Hz (`GET .../sensor`)
 
