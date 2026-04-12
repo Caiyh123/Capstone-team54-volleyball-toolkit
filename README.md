@@ -55,6 +55,7 @@ GymAware **allowlist** (workbook-driven athlete IDs): set `GYMAWARE_USE_ALLOWLIS
 
 ## Documentation
 
+- **[Team handover: what works / what’s next](docs/operations/project_status_handover.md)**
 - [Requirements summary](docs/requirements/requirements-summary.md)
 - [Open questions](docs/requirements/open-questions.md)
 - [Runbook](docs/operations/runbook.md)
