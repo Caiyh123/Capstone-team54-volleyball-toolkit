@@ -22,7 +22,7 @@ Headless ETL pipeline: **Catapult** and **GymAware** → **Supabase (Postgres)**
    .\.venv\Scripts\python.exe verify_integrations.py
    ```
 
-4. **Database** — run SQL in `schema/` (e.g. `catapult_session_metrics.sql`, `gymaware_summaries.sql`, `athlete_identity.sql`, `vald_profiles.sql`, `whoop_oauth_tokens.sql`) in the Supabase SQL editor as needed.
+4. **Database** — run SQL in `schema/` (e.g. `catapult_session_metrics.sql`, `gymaware_summaries.sql`, `athlete_identity.sql`, `vald_profiles.sql`, `whoop_oauth_tokens.sql`, `whoop_staging.sql`) in the Supabase SQL editor as needed.
 
 ## Repository layout
 
@@ -44,6 +44,7 @@ Headless ETL pipeline: **Catapult** and **GymAware** → **Supabase (Postgres)**
 - Integration smoke test: `verify_integrations.py`
 - **VALD** (read API): `vald_export.py` — tenants + optional profiles; `upload_vald_profiles_to_supabase.py` — upsert into `vald_profiles`. Set `VALD_*` and `DATABASE_URL` in `.env`. See [`docs/volley-etl/vald_onboarding.md`](docs/volley-etl/vald_onboarding.md).
 - **WHOOP Auth Bridge** (FastAPI): `backend/app.py` — run `uvicorn backend.app:app --reload --port 8000` from repo root after `pip install -r requirements.txt`. Apply `schema/whoop_oauth_tokens.sql` in Supabase. Set `WHOOP_*` and `DATABASE_URL` in `.env`. See `docs/volley-etl/end_to_end_workflow.md`.
+- **WHOOP ETL** (scheduled job): `whoop_etl.py` — refresh tokens and upsert sleep/workout/cycle/recovery into staging tables. Requires `schema/whoop_staging.sql`, linked rows in `whoop_oauth_token`, and the same `WHOOP_CLIENT_*` + `DATABASE_URL` as the bridge.
 - **Deploy bridge to Render:** `render.yaml` (Blueprint) + step-by-step guide: [`docs/operations/deploy-render-whoop-bridge.md`](docs/operations/deploy-render-whoop-bridge.md).
 
 GymAware **allowlist** (workbook-driven athlete IDs): set `GYMAWARE_USE_ALLOWLIST=1` or use `python gymaware_export.py --allowlist`. See `docs/operations/runbook.md`.

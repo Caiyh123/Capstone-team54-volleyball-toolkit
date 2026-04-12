@@ -85,6 +85,33 @@ def exchange_authorization_code(
     return r.json()
 
 
+def exchange_refresh_token(
+    *,
+    refresh_token: str,
+    client_id: str,
+    client_secret: str,
+) -> dict[str, Any]:
+    """POST refresh_token for new access_token (client_secret_post)."""
+    data: dict[str, str] = {
+        "grant_type": "refresh_token",
+        "refresh_token": _clean_oauth_value(refresh_token),
+        "client_id": _clean_oauth_value(client_id),
+        "client_secret": _clean_oauth_value(client_secret),
+    }
+    r = requests.post(
+        TOKEN_URL,
+        data=data,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=60,
+    )
+    if not r.ok:
+        detail = (r.text or "")[:800]
+        raise RuntimeError(
+            f"HTTP {r.status_code} from token URL (refresh): {detail or r.reason}"
+        )
+    return r.json()
+
+
 def fetch_profile_user_id(access_token: str) -> int | None:
     """Return WHOOP user_id from GET .../developer/v2/user/profile/basic (requires read:profile)."""
     r = requests.get(

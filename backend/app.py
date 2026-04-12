@@ -12,11 +12,9 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-import psycopg2
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from psycopg2.extras import Json
 
 from integrations.whoop.oauth import (
     _clean_oauth_value,
@@ -24,6 +22,7 @@ from integrations.whoop.oauth import (
     exchange_authorization_code,
     fetch_profile_user_id,
 )
+from integrations.whoop.token_store import upsert_whoop_token_row
 
 load_dotenv()
 
@@ -91,45 +90,20 @@ def _upsert_token_row(
             status_code=503,
             detail="DATABASE_URL is not set; cannot store tokens.",
         )
-
-    sql = """
-    INSERT INTO public.whoop_oauth_token (
-        state_label, whoop_user_id, refresh_token, access_token, expires_at,
-        scope, raw_token_response, updated_at, needs_reconnect
-    ) VALUES (
-        %(state_label)s, %(whoop_user_id)s, %(refresh_token)s, %(access_token)s, %(expires_at)s,
-        %(scope)s, %(raw_token_response)s, NOW(), %(needs_reconnect)s
-    )
-    ON CONFLICT (whoop_user_id) DO UPDATE SET
-        state_label = COALESCE(EXCLUDED.state_label, public.whoop_oauth_token.state_label),
-        refresh_token = EXCLUDED.refresh_token,
-        access_token = EXCLUDED.access_token,
-        expires_at = EXCLUDED.expires_at,
-        scope = EXCLUDED.scope,
-        raw_token_response = EXCLUDED.raw_token_response,
-        updated_at = NOW(),
-        needs_reconnect = EXCLUDED.needs_reconnect
-    """
-    conn = psycopg2.connect(db)
     try:
-        cur = conn.cursor()
-        cur.execute(
-            sql,
-            {
-                "state_label": state_label,
-                "whoop_user_id": whoop_user_id,
-                "refresh_token": refresh_token,
-                "access_token": access_token,
-                "expires_at": expires_at,
-                "scope": scope,
-                "raw_token_response": Json(raw),
-                "needs_reconnect": needs_reconnect,
-            },
+        upsert_whoop_token_row(
+            database_url=db,
+            state_label=state_label,
+            whoop_user_id=whoop_user_id,
+            refresh_token=refresh_token,
+            access_token=access_token,
+            expires_at=expires_at,
+            scope=scope,
+            raw=raw,
+            needs_reconnect=needs_reconnect,
         )
-        conn.commit()
-        cur.close()
-    finally:
-        conn.close()
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
 
 
 @app.get("/health")
