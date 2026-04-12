@@ -28,19 +28,32 @@ Run Python from the **repository root** so `.env` and default paths (e.g. GymAwa
 
 ## Scheduled sync (Windows Task Scheduler)
 
-The script `scripts/run_scheduled_sync.ps1` runs Catapult export → upload, then GymAware export → upload.
+The script `scripts/run_scheduled_sync.ps1` runs `python scheduled_etl.py --all` from the repo root. That orchestrates, in order:
+
+| Source | Scripts |
+|--------|---------|
+| Catapult | `bulk_export.py` → `upload_to_supabase.py` |
+| GymAware | `gymaware_export.py` (rolling UTC window) → `upload_gymaware_to_supabase.py` |
+| VALD | `upload_vald_profiles_to_supabase.py` |
+| WHOOP | `whoop_etl.py` |
+| Catapult load index | `load_index.py` (rolling UTC window) |
+
+Run the same orchestrator on Linux/macOS with cron: `python scheduled_etl.py --all` (use the venv’s `python` if applicable).
 
 1. Set `GYMAWARE_USE_ALLOWLIST=1` in `.env` if exports must be limited to the allowlist workbook.
 2. Place `GymAware API Reference Numbers.xlsx` (or set `GYMAWARE_ALLOWLIST_XLSX`) next to `.env` when allowlist is enabled.
-3. Schedule **PowerShell** with execution policy bypass, pointing at this repo’s copy of the script:
+3. Optional lookback env vars: `SCHEDULED_GYMAWARE_LOOKBACK_DAYS`, `SCHEDULED_WHOOP_LOOKBACK_DAYS`, `SCHEDULED_LOAD_INDEX_LOOKBACK_DAYS` (defaults 7 / 14 / 7).
+4. Schedule **PowerShell** with execution policy bypass, pointing at this repo’s copy of the script:
 
 ```text
 powershell.exe -ExecutionPolicy Bypass -File "D:\...\Capstone-team54-volleyball-toolkit\scripts\run_scheduled_sync.ps1"
 ```
 
-4. Ensure **Python** is on the PATH used by the scheduled task, or edit the script to use a full path to `python.exe`.
+5. Ensure **Python** is on the PATH used by the scheduled task, or edit the script to use a full path to `python.exe`.
 
 Logs are written under `logs\` (gitignored).
+
+Subset of sources only: `python scheduled_etl.py --sources catapult,gymaware`.
 
 ## Database schema
 
