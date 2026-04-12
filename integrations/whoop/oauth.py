@@ -13,7 +13,9 @@ import requests
 
 AUTH_URL = "https://api.prod.whoop.com/oauth/oauth2/auth"
 TOKEN_URL = "https://api.prod.whoop.com/oauth/oauth2/token"
-PROFILE_URL = "https://api.prod.whoop.com/v2/user/profile/basic"
+# REST data API base (OpenAPI servers.url); OAuth paths stay under /oauth/ without this prefix.
+WHOOP_API_BASE = "https://api.prod.whoop.com/developer"
+PROFILE_URL = f"{WHOOP_API_BASE}/v2/user/profile/basic"
 
 DEFAULT_SCOPES = (
     "offline read:profile read:recovery read:cycles read:sleep read:workout read:body_measurement"
@@ -84,7 +86,7 @@ def exchange_authorization_code(
 
 
 def fetch_profile_user_id(access_token: str) -> int | None:
-    """Return WHOOP user_id from /v2/user/profile/basic (requires read:profile)."""
+    """Return WHOOP user_id from GET .../developer/v2/user/profile/basic (requires read:profile)."""
     r = requests.get(
         PROFILE_URL,
         headers={"Authorization": f"Bearer {access_token}"},
