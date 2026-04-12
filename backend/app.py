@@ -41,9 +41,10 @@ def root() -> dict[str, str]:
 
 
 @app.get("/whoop/oauth-check")
-def whoop_oauth_check() -> dict[str, str]:
-    """Exact redirect_uri sent to WHOOP — must match Developer Dashboard (fixes invalid_request)."""
+def whoop_oauth_check() -> dict[str, Any]:
+    """Exact redirect_uri + sanity checks for WHOOP env (no secrets exposed)."""
     cid = os.getenv("WHOOP_CLIENT_ID", "").strip()
+    sec = os.getenv("WHOOP_CLIENT_SECRET", "").strip()
     redir = os.getenv("WHOOP_REDIRECT_URI", "").strip()
     if not cid or not redir:
         raise HTTPException(
@@ -53,7 +54,10 @@ def whoop_oauth_check() -> dict[str, str]:
     return {
         "redirect_uri": redir,
         "client_id_prefix": cid[:12] + ("…" if len(cid) > 12 else ""),
-        "hint": "Copy redirect_uri into WHOOP app → Redirect URIs (same string, no extra spaces).",
+        "client_id_length": len(cid),
+        "client_secret_configured": bool(sec),
+        "client_secret_length": len(sec),
+        "hint": "invalid_client = wrong client_id/secret for this app, or secret empty in Render. Re-copy from WHOOP Dashboard (same app as redirect URI).",
     }
 
 
