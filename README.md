@@ -60,6 +60,7 @@ GymAware **allowlist** (workbook-driven athlete IDs): set `GYMAWARE_USE_ALLOWLIS
 - [Open questions](docs/requirements/open-questions.md)
 - [Runbook](docs/operations/runbook.md)
 - [VALD VA / ForceDecks entity notes](docs/volley-etl/vald_va_package_notes.md) (keys + future ForceDecks scope)
+- [Catapult summary vs 10 Hz sensor](docs/volley-etl/catapult_summary_and_sensor.md) — `python scripts/catapult_discover.py`
 
 ## Security
 
