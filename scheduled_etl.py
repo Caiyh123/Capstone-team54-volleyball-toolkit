@@ -13,6 +13,9 @@ Examples:
 Env (optional defaults for lookback windows):
   SCHEDULED_GYMAWARE_LOOKBACK_DAYS, SCHEDULED_WHOOP_LOOKBACK_DAYS,
   SCHEDULED_LOAD_INDEX_LOOKBACK_DAYS
+
+Load index: after load_index.py, runs upload_load_index_to_supabase.py (needs DATABASE_URL).
+VALD: upload_vald_profiles_to_supabase.py only (one API pass). For JSON snapshots, run vald_export.py manually.
 """
 from __future__ import annotations
 
@@ -83,11 +86,25 @@ def run_gymaware(start: str, end: str) -> int:
     return _run_step("GymAware upload", [ROOT / "upload_gymaware_to_supabase.py"])
 
 
+VALD_SNAPSHOT_JSON = ROOT / "vald_snapshot.json"
+
+
 def run_vald(tenant_id: str | None) -> int:
-    cmd: list[Path | str] = [ROOT / "upload_vald_profiles_to_supabase.py"]
+    cmd: list[Path | str] = [
+        ROOT / "vald_export.py",
+        "--profiles",
+        "--out",
+        str(VALD_SNAPSHOT_JSON),
+    ]
     if tenant_id:
         cmd.extend(["--tenant-id", tenant_id])
-    return _run_step("VALD profiles upload", cmd)
+    rc = _run_step("VALD export (tenants + profiles JSON)", cmd)
+    if rc != 0:
+        return rc
+    up: list[Path | str] = [ROOT / "upload_vald_profiles_to_supabase.py"]
+    if tenant_id:
+        up.extend(["--tenant-id", tenant_id])
+    return _run_step("VALD profiles upload", up)
 
 
 def run_whoop(lookback: int, resources: str, dry_run: bool) -> int:
@@ -104,7 +121,7 @@ def run_whoop(lookback: int, resources: str, dry_run: bool) -> int:
 
 
 def run_load_index(start: str, end: str) -> int:
-    return _run_step(
+    rc = _run_step(
         "Catapult load_index",
         [
             ROOT / "load_index.py",
@@ -114,11 +131,17 @@ def run_load_index(start: str, end: str) -> int:
             end,
         ],
     )
+    if rc != 0:
+        return rc
+    return _run_step(
+        "Load index upload to Supabase",
+        [ROOT / "upload_load_index_to_supabase.py"],
+    )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Orchestrate scheduled ETL (Catapult, GymAware, VALD, WHOOP, load index)."
+        description="Orchestrate scheduled ETL (Catapult, GymAware, VALD profiles, WHOOP, load index+upload)."
     )
     parser.add_argument(
         "--all",

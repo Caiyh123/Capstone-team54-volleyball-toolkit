@@ -42,13 +42,14 @@ Headless ETL pipeline: **Catapult** and **GymAware** → **Supabase (Postgres)**
 ## Main Python entrypoints
 
 - Catapult: `bulk_export.py` → `upload_to_supabase.py` (full stats JSONB in `catapult_stats_staging` + narrow `catapult_session_metrics`; apply `schema/catapult_stats_staging.sql`)
+- Load Index: `load_index.py` → `upload_load_index_to_supabase.py` (apply `schema/catapult_load_index.sql`; writes `load_index_result.json` then inserts run + per-activity rows)
 - GymAware: `gymaware_export.py` → `upload_gymaware_to_supabase.py`
 - Load index: `load_index.py`
 - Integration smoke test: `verify_integrations.py`
 - **VALD** (read API): `vald_export.py` — tenants + optional profiles; `upload_vald_profiles_to_supabase.py` — upsert into `vald_profiles`. Set `VALD_*` and `DATABASE_URL` in `.env`. See [`docs/volley-etl/vald_onboarding.md`](docs/volley-etl/vald_onboarding.md).
 - **WHOOP Auth Bridge** (FastAPI): `backend/app.py` — run `uvicorn backend.app:app --reload --port 8000` from repo root after `pip install -r requirements.txt`. Apply `schema/whoop_oauth_tokens.sql` in Supabase. Set `WHOOP_*` and `DATABASE_URL` in `.env`. See `docs/volley-etl/end_to_end_workflow.md`.
 - **WHOOP ETL** (scheduled job): `whoop_etl.py` — refresh tokens and upsert sleep/workout/cycle/recovery into staging tables. Requires `schema/whoop_staging.sql`, linked rows in `whoop_oauth_token`, and the same `WHOOP_CLIENT_*` + `DATABASE_URL` as the bridge.
-- **All sources (scheduler):** `scheduled_etl.py` — runs Catapult, GymAware, VALD profiles, WHOOP ETL, and Catapult `load_index` in one pipeline (`--all` or `--sources ...`). See `docs/operations/runbook.md` and `scripts/run_scheduled_sync.ps1`.
+- **All sources (scheduler):** `scheduled_etl.py` — runs Catapult, GymAware, VALD profile upload, WHOOP ETL, and Catapult load index + DB upload in one pipeline (`--all` or `--sources ...`). See `docs/operations/runbook.md` and `scripts/run_scheduled_sync.ps1`.
 - **Deploy bridge to Render:** `render.yaml` (Blueprint) + step-by-step guide: [`docs/operations/deploy-render-whoop-bridge.md`](docs/operations/deploy-render-whoop-bridge.md).
 
 GymAware **allowlist** (workbook-driven athlete IDs): set `GYMAWARE_USE_ALLOWLIST=1` or use `python gymaware_export.py --allowlist`. See `docs/operations/runbook.md`.

@@ -37,9 +37,9 @@ The script `scripts/run_scheduled_sync.ps1` runs `python scheduled_etl.py --all`
 |--------|---------|
 | Catapult | `bulk_export.py` → `upload_to_supabase.py` |
 | GymAware | `gymaware_export.py` (rolling UTC window) → `upload_gymaware_to_supabase.py` |
-| VALD | `upload_vald_profiles_to_supabase.py` |
+| VALD | `upload_vald_profiles_to_supabase.py` (optional: `vald_export.py` manually for JSON snapshots) |
 | WHOOP | `whoop_etl.py` |
-| Catapult load index | `load_index.py` (rolling UTC window) |
+| Catapult load index | `load_index.py` (rolling UTC window) → `upload_load_index_to_supabase.py` |
 
 Run the same orchestrator on Linux/macOS with cron: `python scheduled_etl.py --all` (use the venv’s `python` if applicable).
 

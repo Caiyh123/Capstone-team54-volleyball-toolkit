@@ -1,27 +1,56 @@
-import os
-import requests
+import argparse
 import json
+import os
 import time
+
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
 TOKEN = os.getenv("CATAPULT_TOKEN")
-BASE_URL = "https://connect-au.catapultsports.com/api/v6"
+BASE_URL = os.getenv("CATAPULT_BASE_URL", "https://connect-au.catapultsports.com/api/v6").rstrip("/")
 
-def get_activities(limit=10):
-    """Fetch a list of recent Activity IDs."""
-    print(f"[INFO] Fetching the latest {limit} activities...")
+# Default cap on how many activity IDs to process (after GET /activities). Set env to 0 or use --all for no cap.
+_DEFAULT_LIMIT_RAW = os.getenv("CATAPULT_BULK_EXPORT_LIMIT", "100").strip()
+
+
+def _default_activity_limit() -> int | None:
+    if not _DEFAULT_LIMIT_RAW or _DEFAULT_LIMIT_RAW == "0":
+        return None
+    try:
+        n = int(_DEFAULT_LIMIT_RAW)
+        return None if n <= 0 else n
+    except ValueError:
+        return 100
+
+
+def get_activities(limit: int | None = 100) -> list:
+    """Fetch activity IDs from GET /activities.
+
+    ``limit`` truncates the list client-side (newest/first N depends on API order).
+    ``limit`` None = use every activity returned in this response.
+
+    Note: Catapult may cap how many sessions one GET returns; this script does not paginate.
+    If you need more than one page, check Catapult API docs for query parameters or support.
+    """
+    if limit is None:
+        print("[INFO] Fetching activities (no client-side limit; using full API response list)...")
+    else:
+        print(f"[INFO] Fetching activities (client cap: latest {limit})...")
     headers = {"Authorization": f"Bearer {TOKEN}", "Accept": "application/json"}
-    
-    response = requests.get(f"{BASE_URL}/activities", headers=headers)
+
+    response = requests.get(f"{BASE_URL}/activities", headers=headers, timeout=120)
     if response.status_code == 200:
         raw = response.json()
         # API may return a list or { "data": [...] }
         activities = raw.get("data", raw) if isinstance(raw, dict) else raw
         if not isinstance(activities, list):
             activities = []
-        # Return just the IDs for the top 'limit' activities
-        return [act.get("id") for act in activities[:limit] if act.get("id")]
+        ids = [act.get("id") for act in activities if act.get("id")]
+        if limit is not None and limit > 0:
+            ids = ids[:limit]
+        print(f"[INFO] Using {len(ids)} activity id(s) from GET /activities (response had {len(activities)} session(s)).")
+        return ids
     else:
         print(f"[ERROR] Failed to fetch activities: {response.status_code}")
         return []
@@ -59,13 +88,14 @@ def get_stats_for_activity(activity_id):
         print(f"  -> [WARNING] Failed to fetch stats for {activity_id}. HTTP {response.status_code}")
         return []
 
-def run_bulk_export():
+def run_bulk_export(limit: int | None) -> None:
+    """``limit`` = max activities (client-side), or ``None`` = no cap (use full GET /activities list)."""
     if not TOKEN:
         print("[ERROR] Missing token.")
         return
 
-    # 1. Get the last 10 activities to test the loop (change to 50 or 100 later)
-    activity_ids = get_activities(limit=100)
+    # 1. Activity IDs from GET /activities (see get_activities docstring for API limits)
+    activity_ids = get_activities(limit=limit)
     if not activity_ids:
         return
         
@@ -96,4 +126,29 @@ def run_bulk_export():
     print("[NEXT STEP] Send this file to Mingye so he can begin modeling.")
 
 if __name__ == "__main__":
-    run_bulk_export()
+    parser = argparse.ArgumentParser(
+        description="Export Catapult POST /stats rows to catapult_bulk_export.json",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Process every activity returned by GET /activities (no client-side cap).",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Process at most N activities (overrides --all). Default: CATAPULT_BULK_EXPORT_LIMIT env or 100.",
+    )
+    args = parser.parse_args()
+
+    lim: int | None
+    if args.all:
+        lim = None
+    elif args.limit is not None:
+        lim = None if args.limit <= 0 else args.limit
+    else:
+        lim = _default_activity_limit()
+
+    run_bulk_export(limit=lim)

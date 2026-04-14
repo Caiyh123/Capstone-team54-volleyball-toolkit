@@ -2,6 +2,9 @@ Suggested order for Supabase SQL Editor (adjust if tables already exist).
 
 1. catapult_session_metrics.sql
 2. catapult_stats_staging.sql
+   (optional) catapult_stats_staging_flat_view.sql — flattened JSON for SQL/BI
+   (optional) catapult_roster_from_stats_view.sql — latest roster fields per athlete
+   catapult_load_index.sql — Load Index runs + per-activity breakdown (load_index.py)
 3. gymaware_summaries.sql
 4. vald_profiles.sql
 5. whoop_oauth_tokens.sql

@@ -32,6 +32,10 @@ def _parse_uuid(s: str | None):
         return None
 
 
+def _stats_payload_jsonb(row: dict) -> Json:
+    return Json(json.loads(json.dumps(row, default=str)))
+
+
 def upload_data() -> int:
     if not DB_URL:
         print("[ERROR] DATABASE_URL not found in your .env file.")
@@ -79,9 +83,9 @@ def upload_data() -> int:
                 cursor.execute(
                     UPSERT_STATS_SQL,
                     {
-                        "activity_id": aid_uuid,
-                        "athlete_id": ath_uuid,
-                        "stats_payload": Json(row),
+                        "activity_id": str(aid_uuid),
+                        "athlete_id": str(ath_uuid) if ath_uuid else None,
+                        "stats_payload": _stats_payload_jsonb(row),
                     },
                 )
                 jsonb_ok += 1
