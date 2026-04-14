@@ -14,9 +14,10 @@ Snapshot for the team: what is working in the repo, how to run it, and what rema
 
 ### Catapult
 
-- **Export:** `bulk_export.py` — pulls recent activities and stats → `catapult_bulk_export.json`.
+- **Export:** `bulk_export.py` — activities and stats → `catapult_bulk_export.json`. Client cap: `CATAPULT_BULK_EXPORT_LIMIT` (default 100) or `python bulk_export.py --all` for the full list returned by `GET /activities` (API may still page/limit server-side).
 - **Load:** `upload_to_supabase.py` — **upserts** full `POST /stats` rows into `public.catapult_stats_staging` (`stats_payload` JSONB); still **inserts** narrow metrics into `public.catapult_session_metrics` (legacy). Apply `schema/catapult_stats_staging.sql` in Supabase.
-- **Load index (metric):** `load_index.py` — strain/jump-based load index → `load_index_result.json` (file output; not all metrics are uploaded to a dedicated table unless extended).
+- **Views (optional SQL):** `schema/catapult_stats_staging_flat_view.sql` — flattened JSON scalars for BI; `schema/catapult_roster_from_stats_view.sql` — latest `team_name` / `position_name` / `athlete_jersey` per athlete key (see file comments when `athlete_id` is null). Order: `schema/apply_order.txt`.
+- **Load index (metric):** `load_index.py` → `load_index_result.json`; **`upload_load_index_to_supabase.py`** inserts into `public.catapult_load_index_run` and `public.catapult_load_index_activity`. Apply `schema/catapult_load_index.sql`.
 
 ### GymAware
 
@@ -39,7 +40,7 @@ Snapshot for the team: what is working in the repo, how to run it, and what rema
 
 ### Scheduled multi-source pipeline
 
-- **Orchestrator:** `scheduled_etl.py` — runs Catapult → GymAware → VALD profiles → WHOOP ETL → Catapult `load_index` (or subsets via `--sources`).
+- **Orchestrator:** `scheduled_etl.py` — Catapult → GymAware → VALD profile upload → WHOOP ETL → `load_index.py` → **`upload_load_index_to_supabase.py`** (or subsets via `--sources`). VALD uses `upload_vald_profiles_to_supabase.py` only (no duplicate `vald_export.py` in the schedule).
 - **Windows Task Scheduler:** `scripts/run_scheduled_sync.ps1` calls `scheduled_etl.py --all`; logs under `logs/`.
 - **Docs:** `docs/operations/runbook.md`, README “Main Python entrypoints”.
 
@@ -51,7 +52,7 @@ Snapshot for the team: what is working in the repo, how to run it, and what rema
 
 ## Verified in practice (recent run)
 
-- `scheduled_etl.py --all` completed successfully: Catapult upload, GymAware upload, VALD profiles upsert, WHOOP ETL (no API error), load index JSON written.
+- `scheduled_etl.py --all` completed successfully: Catapult upload, GymAware upload, VALD profiles upsert, WHOOP ETL (no API error), load index JSON written and load index rows inserted when `DATABASE_URL` is set.
 - **New WHOOP accounts** may return **zero** rows until there is scored sleep/activity in the requested lookback window — expected, not a pipeline failure.
 
 ---
@@ -66,7 +67,7 @@ Snapshot for the team: what is working in the repo, how to run it, and what rema
 | **Production hosting** | Render (or other) for the Auth Bridge; ensure `WHOOP_REDIRECT_URI` matches dashboard + env. Scheduler can run on any machine/cron with `.env`. |
 | **Teamworks AMS** | Config placeholders only — no ETL script until API access and requirements are clear (`docs/volley-etl/whoop_via_teamworks.md`). |
 | **VALD ForceDecks / product metrics** | Profiles are in; ForceDecks and other products are follow-up (see `docs/volley-etl/vald_va_package_notes.md`). |
-| **BI / dashboards** | Wire Supabase to Power BI or stack of choice; staging JSONB may need views or flattened tables for reporting. |
+| **BI / dashboards** | Wire Supabase to Power BI or stack of choice; use optional views (`catapult_stats_staging_flat`, `catapult_roster_from_stats`) and load index tables as needed. |
 | **Documentation polish** | Central `docs/volley-etl/current_scope.md` may predate WHOOP/VALD delivery — align narrative when convenient. |
 
 ---
@@ -87,8 +88,9 @@ python scheduled_etl.py --sources catapult,gymaware
 | Path | Role |
 |------|------|
 | `.env.example` | Variable reference |
-| `schema/apply_order.txt` | Supabase DDL order |
+| `schema/apply_order.txt` | Supabase DDL order (all `schema/*.sql` objects) |
 | `scheduled_etl.py` | Multi-source scheduler |
+| `upload_load_index_to_supabase.py` | Load index JSON → `catapult_load_index_*` |
 | `whoop_etl.py` | WHOOP-only ETL |
 | `backend/app.py` | WHOOP OAuth bridge |
 | `docs/operations/runbook.md` | Install + Task Scheduler |

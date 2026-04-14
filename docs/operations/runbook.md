@@ -60,11 +60,12 @@ Subset of sources only: `python scheduled_etl.py --sources catapult,gymaware`.
 
 ## Database schema
 
-Apply SQL in `schema/` via Supabase SQL editor in an agreed order, e.g.:
+Use the full list in **`schema/apply_order.txt`** (Catapult base tables, optional Catapult views, load index tables, GymAware, VALD, WHOOP, `athlete_identity`). Applying only a subset will break uploads that target missing tables.
 
-- `catapult_session_metrics.sql`
-- `gymaware_summaries.sql`
-- `athlete_identity.sql` (roster crosswalk; populate separately)
+Summary:
+
+- **Catapult:** `catapult_session_metrics.sql`, `catapult_stats_staging.sql`; optional `catapult_stats_staging_flat_view.sql`, `catapult_roster_from_stats_view.sql`; `catapult_load_index.sql` if you use load index uploads.
+- **Other sources:** `gymaware_summaries.sql`, `vald_profiles.sql`, `whoop_oauth_tokens.sql`, `whoop_staging.sql`, `athlete_identity.sql` (roster crosswalk; populate separately).
 
 ## GymAware allowlist
 

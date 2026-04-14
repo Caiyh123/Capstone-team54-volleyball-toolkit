@@ -41,10 +41,9 @@ Headless ETL pipeline: **Catapult** and **GymAware** → **Supabase (Postgres)**
 
 ## Main Python entrypoints
 
-- Catapult: `bulk_export.py` → `upload_to_supabase.py` (full stats JSONB in `catapult_stats_staging` + narrow `catapult_session_metrics`; apply `schema/catapult_stats_staging.sql`)
-- Load Index: `load_index.py` → `upload_load_index_to_supabase.py` (apply `schema/catapult_load_index.sql`; writes `load_index_result.json` then inserts run + per-activity rows)
+- Catapult: `bulk_export.py` → `upload_to_supabase.py` (full stats JSONB in `catapult_stats_staging` + narrow `catapult_session_metrics`; apply `schema/catapult_stats_staging.sql`). Optional views: `schema/catapult_stats_staging_flat_view.sql`, `schema/catapult_roster_from_stats_view.sql`. Export cap: `CATAPULT_BULK_EXPORT_LIMIT` or `bulk_export.py --all`.
+- Load index: `load_index.py` → `upload_load_index_to_supabase.py` (apply `schema/catapult_load_index.sql`; JSON then DB run + per-activity rows)
 - GymAware: `gymaware_export.py` → `upload_gymaware_to_supabase.py`
-- Load index: `load_index.py`
 - Integration smoke test: `verify_integrations.py`
 - **VALD** (read API): `vald_export.py` — tenants + optional profiles; `upload_vald_profiles_to_supabase.py` — upsert into `vald_profiles`. Set `VALD_*` and `DATABASE_URL` in `.env`. See [`docs/volley-etl/vald_onboarding.md`](docs/volley-etl/vald_onboarding.md).
 - **WHOOP Auth Bridge** (FastAPI): `backend/app.py` — run `uvicorn backend.app:app --reload --port 8000` from repo root after `pip install -r requirements.txt`. Apply `schema/whoop_oauth_tokens.sql` in Supabase. Set `WHOOP_*` and `DATABASE_URL` in `.env`. See `docs/volley-etl/end_to_end_workflow.md`.
