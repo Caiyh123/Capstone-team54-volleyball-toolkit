@@ -3,7 +3,6 @@ Suggested order for Supabase SQL Editor (adjust if tables already exist).
 1. catapult_session_metrics.sql
 2. catapult_stats_staging.sql
    (optional) catapult_stats_staging_flat_view.sql — flattened JSON for SQL/BI
-   (optional) catapult_roster_from_stats_view.sql — latest roster fields per athlete
    (optional) catapult_load_index.sql — Load Index runs + per-activity breakdown (load_index.py + upload)
 3. gymaware_summaries.sql
 4. vald_profiles.sql
@@ -13,6 +12,7 @@ Suggested order for Supabase SQL Editor (adjust if tables already exist).
 8. roster_cohort.sql
    (If roster_cohort already exists without catapult_jersey: run roster_cohort_catapult_jersey.sql once.)
 9. roster_filtered_views.sql (cohort-scoped views for BI; run after roster_cohort is populated or empty)
+   (optional) catapult_roster_from_stats_view.sql — latest roster fields per athlete (cohort-only; depends on catapult_stats_staging_roster)
 10. medallion_raw_layer_migration.sql — append-only raw layer (etl_ingested_at, surrogate PKs); required before updated Python ETL
 11. intermediate_big_table_view.sql — Power BI intermediate wide view (after medallion migration; uses catapult_stats_staging directly)
 

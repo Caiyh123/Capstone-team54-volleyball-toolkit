@@ -41,7 +41,7 @@ Headless ETL pipeline: **Catapult** and **GymAware** → **Supabase (Postgres)**
 
 ## Main Python entrypoints
 
-- Catapult: `bulk_export.py` → `upload_to_supabase.py` (full stats JSONB in `catapult_stats_staging` + narrow `catapult_session_metrics`; apply `schema/catapult_stats_staging.sql`). Optional views: `schema/catapult_stats_staging_flat_view.sql`, `schema/catapult_roster_from_stats_view.sql`. Export cap: `CATAPULT_BULK_EXPORT_LIMIT` or `bulk_export.py --all`.
+- Catapult: `bulk_export.py` → `upload_to_supabase.py` (full stats JSONB in `catapult_stats_staging` + narrow `catapult_session_metrics`; apply `schema/catapult_stats_staging.sql`). For production roster scope set **`ROSTER_FILTER=1`** in `.env` so export and upload only include athletes in the workbook (otherwise all sessions’ athletes can be ingested). SQL cohort views: `schema/roster_filtered_views.sql` (`catapult_stats_staging_roster`), then optional `catapult_stats_staging_flat_view.sql`, `catapult_roster_from_stats_view.sql`. Export cap: `CATAPULT_BULK_EXPORT_LIMIT` or `bulk_export.py --all`.
 - Load index: `load_index.py` → `upload_load_index_to_supabase.py` (apply `schema/catapult_load_index.sql`; JSON then DB run + per-activity rows)
 - GymAware: `gymaware_export.py` → `upload_gymaware_to_supabase.py`
 - Integration smoke test: `verify_integrations.py`

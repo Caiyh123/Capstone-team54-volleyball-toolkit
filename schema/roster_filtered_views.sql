@@ -24,6 +24,7 @@ COMMENT ON VIEW public.vald_profiles_roster IS
     'vald_profiles restricted to roster_cohort profile IDs.';
 
 -- Catapult stats: UUID path (athlete_identity) OR jersey path (stats_payload.athlete_jersey + roster_cohort.catapult_jersey)
+-- UUID may be only in JSON (participating_athlete.id) while c.athlete_id is NULL — match both like integrations/catapult/stats_row.py.
 CREATE OR REPLACE VIEW public.catapult_stats_staging_roster AS
 SELECT c.*
 FROM public.catapult_stats_staging c
@@ -34,8 +35,16 @@ WHERE EXISTS (
       ON ai.gymaware_athlete_reference = r.gymaware_athlete_reference
     WHERE ai.catapult_athlete_id IS NOT NULL
       AND btrim(ai.catapult_athlete_id) <> ''
-      AND c.athlete_id IS NOT NULL
-      AND c.athlete_id::text = btrim(ai.catapult_athlete_id)
+      AND (
+        (
+            c.athlete_id IS NOT NULL
+            AND c.athlete_id::text = btrim(ai.catapult_athlete_id)
+        )
+        OR (
+            NULLIF(btrim(c.stats_payload->'participating_athlete'->>'id'), '') IS NOT NULL
+            AND lower(btrim(c.stats_payload->'participating_athlete'->>'id')) = lower(btrim(ai.catapult_athlete_id))
+        )
+    )
 )
 OR EXISTS (
     SELECT 1
@@ -47,7 +56,7 @@ OR EXISTS (
 );
 
 COMMENT ON VIEW public.catapult_stats_staging_roster IS
-    'catapult_stats_staging for cohort: UUID via athlete_identity, or jersey via stats_payload + roster_cohort.catapult_jersey.';
+    'catapult_stats_staging for cohort: UUID via athlete_identity (column or participating_athlete.id in payload), or jersey via stats_payload + roster_cohort.catapult_jersey.';
 
 -- WHOOP staging: token state_label must match roster GymAware ID (OAuth start link)
 CREATE OR REPLACE VIEW public.whoop_sleep_staging_roster AS

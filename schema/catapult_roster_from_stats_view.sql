@@ -1,5 +1,6 @@
 -- Latest Catapult roster fields per logical athlete from stats_payload.
--- Run after catapult_stats_staging.sql. Complements athlete_identity (manual crosswalk).
+-- Run after catapult_stats_staging.sql AND schema/roster_filtered_views.sql (uses catapult_stats_staging_roster).
+-- Complements athlete_identity (manual crosswalk).
 --
 -- IMPORTANT: catapult_stats_staging.athlete_key is COALESCE(athlete_id, zero-uuid). When
 -- athlete_id is NULL for every row, athlete_key is identical for all rows, so DISTINCT ON
@@ -48,10 +49,10 @@ FROM (
                 END,
                 s.activity_id::text
             ) AS roster_key
-        FROM public.catapult_stats_staging s
+        FROM public.catapult_stats_staging_roster s
     ) s
     ORDER BY roster_key, s.synced_at DESC, s.activity_id DESC
 ) x;
 
 COMMENT ON VIEW public.catapult_roster_from_stats IS
-    'Latest team_name, position_name, athlete_jersey per roster_key (Catapult athlete id, payload ids, or team|jersey|position, else activity).';
+    'Cohort-scoped: built from catapult_stats_staging_roster. Latest team_name, position_name, athlete_jersey per roster_key.';
