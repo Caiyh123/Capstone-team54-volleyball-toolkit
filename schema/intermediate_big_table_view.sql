@@ -192,7 +192,6 @@ SELECT
 FROM public.roster_cohort rc
 LEFT JOIN public.athlete_identity ai
     ON ai.gymaware_athlete_reference = rc.gymaware_athlete_reference
-WHERE rc.catapult_jersey IS NULL OR btrim(rc.catapult_jersey) = ''
 LEFT JOIN LATERAL (
     SELECT v.given_name, v.family_name, v.email, v.date_of_birth, v.etl_ingested_at
     FROM public.vald_profiles v
@@ -225,7 +224,8 @@ LEFT JOIN LATERAL (
       AND sl.whoop_user_id = ai.whoop_user_id
     ORDER BY sl.etl_ingested_at DESC
     LIMIT 1
-) ws ON TRUE;
+) ws ON TRUE
+WHERE rc.catapult_jersey IS NULL OR btrim(rc.catapult_jersey) = '';
 
 COMMENT ON VIEW public.intermediate_big_table IS
     'Catapult stats rows (A) plus roster athletes without Catapult jersey (B): VALD/GymAware/WHOOP only.';
