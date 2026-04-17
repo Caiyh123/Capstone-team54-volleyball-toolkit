@@ -7,4 +7,6 @@ This directory holds the **client roster workbook** used when `ROSTER_FILTER=1`.
 
 To update the roster: replace `allowlist.xlsx` with a new export from the client (keep the same filename) and commit.
 
+For optional columns (e.g. **Catapult Jerseys**), leave the cell **blank** when not applicable. The ETL also treats `N/A`, `NA`, `-`, etc. as empty, but blanks are clearest.
+
 Confirm with your client that storing this workbook in the repository is acceptable (it may contain names and internal IDs).

@@ -48,6 +48,28 @@ def _norm_cell(x: Any) -> str:
     return str(x).strip()
 
 
+def _empty_if_placeholder(x: Any) -> str:
+    """Treat N/A, NA, -, TBD, etc. as empty for optional roster cells (jersey, etc.)."""
+    s = _norm_cell(x)
+    if not s:
+        return ""
+    low = s.casefold()
+    if low in (
+        "n/a",
+        "n.a.",
+        "n.a",
+        "none",
+        "null",
+        "-",
+        "--",
+        "not available",
+        "tbd",
+        "tba",
+    ) or low == "nan":
+        return ""
+    return s
+
+
 def _norm_header(x: Any) -> str:
     return _norm_cell(x).lower()
 
@@ -62,8 +84,8 @@ def _find_col(header: list[str], *needles: str) -> int | None:
 def _parse_uuid_cell(v: Any) -> str | None:
     if v is None or (isinstance(v, float) and str(v) == "nan"):
         return None
-    s = _norm_cell(v)
-    if not s or s.lower() == "nan":
+    s = _empty_if_placeholder(v)
+    if not s:
         return None
     m = re.search(
         r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
@@ -191,8 +213,8 @@ def load_roster_allowlist(path: str | Path | None = None) -> tuple[list[dict[str
                 rows_out[-1]["catapult_athlete_id"] = cu
 
         if jersey_cell is not None:
-            js = _norm_cell(jersey_cell)
-            if js and js.lower() != "nan":
+            js = _empty_if_placeholder(jersey_cell)
+            if js:
                 jerseys.add(js)
                 rows_out[-1]["catapult_jersey"] = js
 
