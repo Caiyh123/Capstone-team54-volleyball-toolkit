@@ -162,7 +162,7 @@ Populated manually or by your process; not filled by the scheduled vendor ETL sc
 | View | Purpose |
 |------|---------|
 | `public.catapult_stats_staging_flat` | Scalar fields from Catapult JSONB + `ingest_id` / `etl_ingested_at` |
-| `public.intermediate_big_table` | Catapult row + identity (UUID or jersey→roster) + `roster_cohort` + VALD/GymAware (keys from identity or roster) + WHOOP sleep; **cohort-filtered** (same scope as `catapult_stats_staging_roster`) |
+| `public.intermediate_big_table` | **(A)** Catapult stats rows + identity/roster + same-day GymAware/WHOOP. **(B)** `UNION`: roster rows with no Catapult jersey — Catapult columns NULL; VALD/GymAware from roster + staging; WHOOP if `athlete_identity.whoop_user_id` is set |
 | `public.*_roster` | Cohort-scoped vendor views (`schema/roster_filtered_views.sql`) |
 
 ---
