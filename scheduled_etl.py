@@ -255,6 +255,10 @@ def main() -> int:
 
     print("\n" + json.dumps(summary, indent=2), flush=True)
 
+    # With --continue-on-error we still run every source; treat orchestration as success
+    # so CI does not fail the workflow when one vendor API errors (see summary JSON).
+    if args.continue_on_error:
+        return 0
     return 0 if not failed else 1
 
 
