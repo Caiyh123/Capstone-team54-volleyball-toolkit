@@ -1,0 +1,50 @@
+# Nightly ETL: requires repository Secrets (Settings → Secrets and variables → Actions).
+# Add: DATABASE_URL, CATAPULT_TOKEN, GYMAWARE_ACCOUNT_ID, GYMAWARE_TOKEN,
+#      VALD_CLIENT_ID, VALD_CLIENT_SECRET, WHOOP_CLIENT_ID, WHOOP_CLIENT_SECRET
+# Optional secrets: CATAPULT_BASE_URL, VALD_OAUTH_TOKEN_URL, VALD_API_BASE_*, etc.
+#
+# Roster: committed workbook at data/roster/allowlist.xlsx — ROSTER_FILTER=1 + ROSTER_ALLOWLIST_XLSX below.
+
+name: Daily ETL
+
+on:
+  schedule:
+    # 06:15 UTC daily — adjust for your team's quiet window
+    - cron: "15 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: daily-etl-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  scheduled-etl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run scheduled_etl.py
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          CATAPULT_TOKEN: ${{ secrets.CATAPULT_TOKEN }}
+          CATAPULT_BASE_URL: ${{ secrets.CATAPULT_BASE_URL }}
+          GYMAWARE_ACCOUNT_ID: ${{ secrets.GYMAWARE_ACCOUNT_ID }}
+          GYMAWARE_TOKEN: ${{ secrets.GYMAWARE_TOKEN }}
+          VALD_CLIENT_ID: ${{ secrets.VALD_CLIENT_ID }}
+          VALD_CLIENT_SECRET: ${{ secrets.VALD_CLIENT_SECRET }}
+          WHOOP_CLIENT_ID: ${{ secrets.WHOOP_CLIENT_ID }}
+          WHOOP_CLIENT_SECRET: ${{ secrets.WHOOP_CLIENT_SECRET }}
+          # Committed roster: data/roster/allowlist.xlsx (see data/roster/README.md).
+          ROSTER_FILTER: "1"
+          ROSTER_ALLOWLIST_XLSX: data/roster/allowlist.xlsx
+          SCHEDULED_GYMAWARE_LOOKBACK_DAYS: ${{ vars.SCHEDULED_GYMAWARE_LOOKBACK_DAYS }}
+          SCHEDULED_WHOOP_LOOKBACK_DAYS: ${{ vars.SCHEDULED_WHOOP_LOOKBACK_DAYS }}
+          SCHEDULED_LOAD_INDEX_LOOKBACK_DAYS: ${{ vars.SCHEDULED_LOAD_INDEX_LOOKBACK_DAYS }}
+        run: python scheduled_etl.py --all --continue-on-error
