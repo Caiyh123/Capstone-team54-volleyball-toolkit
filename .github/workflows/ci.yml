@@ -6,12 +6,16 @@ on:
   pull_request:
     branches: [main, master]
 
+# Use Node 24 for JS-based actions (GitHub Actions deprecation of Node 20).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   compile:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install dependencies
