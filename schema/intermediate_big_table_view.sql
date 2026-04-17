@@ -1,20 +1,23 @@
 -- Intermediate "big table" for Power BI: one row per Catapult stats row (append-only grain),
--- joined to athlete_identity, roster_cohort, latest VALD profile row, same-day GymAware summaries,
--- and a same-day WHOOP sleep payload when whoop_user_id is mapped.
+-- joined to athlete_identity + roster_cohort, latest VALD profile row, same-day GymAware summaries,
+-- and same-day WHOOP sleep when whoop_user_id is mapped in athlete_identity.
 --
--- Prerequisites: medallion_raw_layer_migration.sql (ingest_id + etl_ingested_at on catapult_stats_staging),
--- athlete_identity.sql, roster_cohort.sql, vendor staging tables.
+-- Identity resolution (matches roster_filtered_views / catapult_stats_staging_roster):
+--   1) Catapult athlete UUID -> athlete_identity.catapult_athlete_id
+--   2) Else stats_payload.athlete_jersey -> roster_cohort.catapult_jersey -> athlete_identity via gymaware ref
+-- Roster + VALD/GymAware can resolve from roster_cohort alone when athlete_identity is missing a UUID but
+-- jersey matches roster (VALD profile id on roster row).
 --
--- This view reads directly from public.catapult_stats_staging (not catapult_stats_staging_flat) so it
--- does not depend on re-deploying the flat view after the medallion migration.
+-- Rows are limited to the approved cohort (in roster via UUID path OR jersey path). Sessions with no
+-- roster match (e.g. empty jersey and no resolvable UUID in cohort) are excluded so non-Catapult-only
+-- roster members and stray sessions do not appear.
 --
--- Notes:
--- - Date alignment uses Catapult stats_date text or start_time epoch (UTC). Validate against client TZ rules.
--- - GymAware `recorded` is treated as Unix seconds; values > 1e12 are divided by 1000 (ms).
--- - WHOOP payload keys follow API v2 (e.g. sleep payload `start` ISO string).
--- - Jersey-only Catapult athletes (no UUID in athlete_identity) will have NULL athlete_identity_id until mapped.
+-- Prerequisites: medallion_raw_layer_migration.sql, athlete_identity.sql, roster_cohort.sql, vendor staging.
 
-CREATE OR REPLACE VIEW public.intermediate_big_table
+-- Postgres: replacing this view may require drop if column list changes.
+DROP VIEW IF EXISTS public.intermediate_big_table CASCADE;
+
+CREATE VIEW public.intermediate_big_table
 WITH (security_invoker = true)
 AS
 SELECT
@@ -33,8 +36,8 @@ SELECT
     ai.id AS athlete_identity_id,
     ai.internal_key AS athlete_internal_key,
     ai.display_name AS athlete_display_name,
-    ai.gymaware_athlete_reference,
-    ai.vald_profile_id,
+    COALESCE(ai.gymaware_athlete_reference, rc.gymaware_athlete_reference) AS gymaware_athlete_reference,
+    COALESCE(ai.vald_profile_id, rc.vald_profile_id) AS vald_profile_id,
     ai.whoop_user_id,
 
     rc.display_label AS roster_display_label,
@@ -74,20 +77,57 @@ CROSS JOIN LATERAL (
             END
         ) AS cal_date
 ) d
-LEFT JOIN public.athlete_identity ai
-    ON cs.athlete_id IS NOT NULL
-   AND ai.catapult_athlete_id IS NOT NULL
-   AND btrim(ai.catapult_athlete_id) <> ''
-   AND cs.athlete_id::text = btrim(ai.catapult_athlete_id)
-LEFT JOIN public.roster_cohort rc
-    ON ai.gymaware_athlete_reference IS NOT NULL
-   AND rc.gymaware_athlete_reference = ai.gymaware_athlete_reference
+LEFT JOIN LATERAL (
+    SELECT a.*
+    FROM public.athlete_identity a
+    WHERE (
+        cs.athlete_id IS NOT NULL
+        AND a.catapult_athlete_id IS NOT NULL
+        AND btrim(a.catapult_athlete_id) <> ''
+        AND cs.athlete_id::text = btrim(a.catapult_athlete_id)
+    )
+    OR (
+        a.gymaware_athlete_reference IN (
+            SELECT r.gymaware_athlete_reference
+            FROM public.roster_cohort r
+            WHERE r.catapult_jersey IS NOT NULL
+              AND btrim(r.catapult_jersey) <> ''
+              AND btrim(cs.stats_payload->>'athlete_jersey') <> ''
+              AND lower(btrim(r.catapult_jersey)) = lower(btrim(cs.stats_payload->>'athlete_jersey'))
+        )
+    )
+    ORDER BY
+        CASE
+            WHEN cs.athlete_id IS NOT NULL
+                 AND a.catapult_athlete_id IS NOT NULL
+                 AND cs.athlete_id::text = btrim(a.catapult_athlete_id)
+            THEN 0
+            ELSE 1
+        END
+    LIMIT 1
+) ai ON TRUE
+LEFT JOIN LATERAL (
+    SELECT r.*
+    FROM public.roster_cohort r
+    WHERE (
+        ai.id IS NOT NULL
+        AND ai.gymaware_athlete_reference IS NOT NULL
+        AND r.gymaware_athlete_reference = ai.gymaware_athlete_reference
+    )
+    OR (
+        btrim(cs.stats_payload->>'athlete_jersey') <> ''
+        AND r.catapult_jersey IS NOT NULL
+        AND btrim(r.catapult_jersey) <> ''
+        AND lower(btrim(r.catapult_jersey)) = lower(btrim(cs.stats_payload->>'athlete_jersey'))
+    )
+    LIMIT 1
+) rc ON TRUE
 LEFT JOIN LATERAL (
     SELECT v.given_name, v.family_name, v.email, v.date_of_birth, v.etl_ingested_at
     FROM public.vald_profiles v
-    WHERE ai.vald_profile_id IS NOT NULL
-      AND btrim(ai.vald_profile_id) <> ''
-      AND lower(btrim(v.profile_id)) = lower(btrim(ai.vald_profile_id))
+    WHERE COALESCE(btrim(ai.vald_profile_id), btrim(rc.vald_profile_id)) IS NOT NULL
+      AND btrim(COALESCE(ai.vald_profile_id, rc.vald_profile_id)) <> ''
+      AND lower(btrim(v.profile_id)) = lower(btrim(COALESCE(ai.vald_profile_id, rc.vald_profile_id)))
     ORDER BY v.etl_ingested_at DESC NULLS LAST
     LIMIT 1
 ) vp ON TRUE
@@ -105,10 +145,10 @@ LEFT JOIN LATERAL (
     ) AS gymaware_sets_json
     FROM public.gymaware_summaries g
     WHERE d.cal_date IS NOT NULL
-      AND ai.gymaware_athlete_reference IS NOT NULL
+      AND COALESCE(ai.gymaware_athlete_reference, rc.gymaware_athlete_reference) IS NOT NULL
       AND g.athlete_reference IS NOT NULL
       AND trim(g.athlete_reference) ~ '^[0-9]+$'
-      AND g.athlete_reference::bigint = ai.gymaware_athlete_reference
+      AND g.athlete_reference::bigint = COALESCE(ai.gymaware_athlete_reference, rc.gymaware_athlete_reference)
       AND date_trunc(
           'day',
           to_timestamp(
@@ -131,7 +171,27 @@ LEFT JOIN LATERAL (
       AND date_trunc('day', (sl.payload->>'start')::timestamptz AT TIME ZONE 'UTC')::date = d.cal_date
     ORDER BY sl.etl_ingested_at DESC
     LIMIT 1
-) ws ON TRUE;
+) ws ON TRUE
+WHERE (
+    EXISTS (
+        SELECT 1
+        FROM public.athlete_identity ai2
+        INNER JOIN public.roster_cohort r
+          ON ai2.gymaware_athlete_reference = r.gymaware_athlete_reference
+        WHERE ai2.catapult_athlete_id IS NOT NULL
+          AND btrim(ai2.catapult_athlete_id) <> ''
+          AND cs.athlete_id IS NOT NULL
+          AND cs.athlete_id::text = btrim(ai2.catapult_athlete_id)
+    )
+    OR EXISTS (
+        SELECT 1
+        FROM public.roster_cohort r2
+        WHERE r2.catapult_jersey IS NOT NULL
+          AND btrim(r2.catapult_jersey) <> ''
+          AND btrim(cs.stats_payload->>'athlete_jersey') <> ''
+          AND lower(btrim(cs.stats_payload->>'athlete_jersey')) = lower(btrim(r2.catapult_jersey))
+    )
+);
 
 COMMENT ON VIEW public.intermediate_big_table IS
-    'Intermediate layer: Catapult stats row + identity/roster + VALD + same-calendar-day GymAware JSON + WHOOP sleep.';
+    'Intermediate layer: Catapult row + identity/roster (UUID or jersey) + VALD + GymAware + WHOOP sleep; cohort-scoped.';
