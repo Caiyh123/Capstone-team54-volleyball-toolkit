@@ -30,8 +30,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from integrations import config
+from integrations.catapult.stats_row import (
+    athlete_id_from_stats_row,
+    athlete_jersey_from_stats_row,
+    jersey_from_activity_athlete,
+)
+from integrations.roster_allowlist import (
+    catapult_roster_filters,
+    env_roster_filter_enabled,
+    load_roster_allowlist,
+)
 
 PAUSE_S = float(os.getenv("CATAPULT_API_PAUSE", "0.5"))
+DB_URL = os.getenv("DATABASE_URL", "").strip()
 
 
 def _activity_date(act: dict[str, Any]) -> datetime | None:
@@ -64,7 +75,11 @@ def activities_in_range(
 
 
 def sum_player_load_for_activity(
-    headers: dict[str, str], base: str, activity_id: str
+    headers: dict[str, str],
+    base: str,
+    activity_id: str,
+    allowed_athlete_ids: set[str] | None = None,
+    allowed_jerseys_fold: set[str] | None = None,
 ) -> float:
     payload = {
         "group_by": ["participating_athlete"],
@@ -82,10 +97,19 @@ def sum_player_load_for_activity(
         return 0.0
     raw = r.json()
     rows = raw if isinstance(raw, list) else raw.get("data", []) if isinstance(raw, dict) else []
+    allow = {x.lower() for x in allowed_athlete_ids} if allowed_athlete_ids is not None else None
     total = 0.0
     for row in rows:
         if not isinstance(row, dict):
             continue
+        if allowed_jerseys_fold is not None:
+            j = athlete_jersey_from_stats_row(row)
+            if not j or j.casefold() not in allowed_jerseys_fold:
+                continue
+        elif allow is not None:
+            aid = athlete_id_from_stats_row(row)
+            if not aid or str(aid).strip().lower() not in allow:
+                continue
         v = row.get("total_player_load")
         if v is not None:
             try:
@@ -231,6 +255,28 @@ def main() -> int:
         print(f"[INFO] --max-activities {args.max_activities} applied")
     print(f"[INFO] {len(in_range)} activit(y/ies) in range (of {len(activities)} total)\n")
 
+    allow_uuids: set[str] | None = None
+    allow_jerseys_fold: set[str] | None = None
+    if env_roster_filter_enabled():
+        try:
+            _, roster = load_roster_allowlist()
+        except FileNotFoundError as e:
+            print(f"[ERROR] ROSTER_FILTER=1 but roster workbook missing: {e}")
+            return 1
+        allow_uuids, allow_jerseys_fold = catapult_roster_filters(DB_URL, roster)
+        if not allow_uuids and not allow_jerseys_fold:
+            print(
+                "[ERROR] ROSTER_FILTER=1 but no Catapult filter resolved. "
+                "Add 'Catapult Jerseys' to the roster workbook, or catapult_athlete_id in athlete_identity."
+            )
+            return 1
+        if allow_jerseys_fold is not None:
+            print(
+                f"[INFO] ROSTER_FILTER: load index uses {len(allow_jerseys_fold)} jersey code(s) only.\n"
+            )
+        else:
+            print(f"[INFO] ROSTER_FILTER: load index uses {len(allow_uuids or [])} Catapult UUID(s) only.\n")
+
     total_load = 0.0
     total_jumps = 0
     breakdown: list[dict[str, Any]] = []
@@ -242,7 +288,13 @@ def main() -> int:
             continue
         print(f"[{idx + 1}/{len(in_range)}] {name} ({aid})")
 
-        load_sum = sum_player_load_for_activity(headers, base, aid)
+        load_sum = sum_player_load_for_activity(
+            headers,
+            base,
+            aid,
+            allowed_athlete_ids=allow_uuids,
+            allowed_jerseys_fold=allow_jerseys_fold,
+        )
         total_load += load_sum
         time.sleep(PAUSE_S)
 
@@ -252,6 +304,12 @@ def main() -> int:
         for j, ath in enumerate(athletes):
             ath_id = ath.get("id")
             if not ath_id:
+                continue
+            if allow_jerseys_fold is not None:
+                jn = jersey_from_activity_athlete(ath)
+                if not jn or jn.casefold() not in allow_jerseys_fold:
+                    continue
+            elif allow_uuids is not None and str(ath_id).strip().lower() not in allow_uuids:
                 continue
             nj = fetch_jump_count_for_athlete(headers, base, aid, ath_id)
             act_jumps += nj

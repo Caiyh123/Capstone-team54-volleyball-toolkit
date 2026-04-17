@@ -1,5 +1,5 @@
 """
-Scheduled WHOOP ETL: refresh OAuth tokens; pull v2 collections into staging tables.
+Scheduled WHOOP ETL: refresh OAuth tokens; pull v2 collections into staging tables (append-only inserts).
 
 Requires .env:
   DATABASE_URL, WHOOP_CLIENT_ID, WHOOP_CLIENT_SECRET
@@ -28,6 +28,11 @@ from psycopg2.extras import Json
 
 load_dotenv()
 
+from integrations.roster_allowlist import (
+    env_roster_filter_enabled,
+    load_roster_allowlist,
+    whoop_allowed_state_labels,
+)
 from integrations.whoop.etl import (
     RESOURCE_SYNCERS,
     run_etl,
@@ -109,6 +114,18 @@ def main() -> int:
         print(f"[ERROR] {e}", file=sys.stderr)
         return 1
 
+    allowed_states: set[str] | None = None
+    if env_roster_filter_enabled():
+        _, roster = load_roster_allowlist()
+        allowed_states = whoop_allowed_state_labels(roster)
+        if not allowed_states:
+            print("[ERROR] ROSTER_FILTER=1 but roster workbook has no GymAware IDs.", file=sys.stderr)
+            return 1
+        print(
+            f"[INFO] ROSTER_FILTER: WHOOP ETL limited to {len(allowed_states)} linked account(s) "
+            f"(state_label must match roster GymAware ID)."
+        )
+
     summary = run_etl(
         database_url=db,
         client_id=cid,
@@ -117,6 +134,7 @@ def main() -> int:
         resources=res_list,
         whoop_user_id=args.whoop_user_id.strip() or None,
         dry_run=args.dry_run,
+        allowed_state_labels=allowed_states,
     )
     summary["lookback_days"] = max(1, args.lookback_days)
     summary["resources"] = res_list

@@ -17,59 +17,44 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def _resolve_allowlist_path(path: str | Path | None) -> Path:
+    if path:
+        return Path(path)
+    p = os.getenv("ROSTER_ALLOWLIST_XLSX", "").strip()
+    if p:
+        return Path(p)
+    p = os.getenv("GYMAWARE_ALLOWLIST_XLSX", "").strip()
+    if p:
+        return Path(p)
+    return _project_root() / DEFAULT_REL
+
+
 def load_athlete_references_from_xlsx(
     path: str | Path | None = None,
 ) -> tuple[list[dict[str, Any]], set[int]]:
     """
-    Parse Sheet1 with columns: Last Name, First Name, GymAware API ID (4th column in file).
+    Parse roster workbook (sheet GymAware when present): Last Name, First Name, GymAware API ID.
+    Legacy workbooks with index column still supported via integrations.roster_allowlist.
 
     Returns (rows_as_dicts, reference_id_set).
     """
-    try:
-        import openpyxl
-    except ImportError as e:
-        raise RuntimeError("Install openpyxl: pip install openpyxl") from e
+    from integrations.roster_allowlist import load_roster_allowlist
 
-    if path is None:
-        path = os.getenv("GYMAWARE_ALLOWLIST_XLSX", "").strip()
-    if not path:
-        path = _project_root() / DEFAULT_REL
-    path = Path(path)
+    path = _resolve_allowlist_path(path)
     if not path.is_file():
         raise FileNotFoundError(f"Allowlist workbook not found: {path}")
 
-    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-    try:
-        ws = wb[wb.sheetnames[0]]
-        rows_out: list[dict[str, Any]] = []
-        refs: set[int] = set()
-        for row in ws.iter_rows(min_row=1, values_only=True):
-            if not row or len(row) < 4:
-                continue
-            last = row[1]
-            first = row[2]
-            ref = row[3]
-            if ref is None or str(ref).strip() == "":
-                continue
-            if isinstance(ref, str) and "API ID" in ref:
-                continue  # header
-            try:
-                ref_int = int(ref)
-            except (TypeError, ValueError):
-                continue
-            ln = str(last).strip() if last is not None else ""
-            fn = str(first).strip() if first is not None else ""
-            rows_out.append(
-                {
-                    "last_name": ln,
-                    "first_name": fn,
-                    "athlete_reference": ref_int,
-                }
-            )
-            refs.add(ref_int)
-        return rows_out, refs
-    finally:
-        wb.close()
+    rows_out, allow = load_roster_allowlist(path)
+    refs = set(allow.gymaware_refs)
+    compat = [
+        {
+            "last_name": r.get("last_name", ""),
+            "first_name": r.get("first_name", ""),
+            "athlete_reference": r["athlete_reference"],
+        }
+        for r in rows_out
+    ]
+    return compat, refs
 
 
 def athlete_reference_allowlist() -> set[int]:
@@ -79,7 +64,11 @@ def athlete_reference_allowlist() -> set[int]:
 
 
 def env_use_allowlist() -> bool:
-    """True when GYMAWARE_USE_ALLOWLIST is 1/true/yes/on (export + upload respect this)."""
+    """True when ROSTER_FILTER or GYMAWARE_USE_ALLOWLIST enables workbook-based filtering."""
+    from integrations.roster_allowlist import env_roster_filter_enabled
+
+    if env_roster_filter_enabled():
+        return True
     v = os.getenv("GYMAWARE_USE_ALLOWLIST", "").strip().lower()
     return v in ("1", "true", "yes", "on")
 

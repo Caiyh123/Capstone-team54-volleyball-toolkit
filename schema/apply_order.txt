@@ -10,6 +10,11 @@ Suggested order for Supabase SQL Editor (adjust if tables already exist).
 5. whoop_oauth_tokens.sql
 6. whoop_staging.sql
 7. athlete_identity.sql
+8. roster_cohort.sql
+   (If roster_cohort already exists without catapult_jersey: run roster_cohort_catapult_jersey.sql once.)
+9. roster_filtered_views.sql (cohort-scoped views for BI; run after roster_cohort is populated or empty)
+10. medallion_raw_layer_migration.sql — append-only raw layer (etl_ingested_at, surrogate PKs); required before updated Python ETL
+11. intermediate_big_table_view.sql — Power BI intermediate wide view (after medallion migration; uses catapult_stats_staging directly)
 
 Notes:
 - whoop_staging depends on nothing except Postgres; run after whoop_oauth_tokens if you want related objects grouped.

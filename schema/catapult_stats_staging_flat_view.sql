@@ -1,5 +1,6 @@
 -- Optional: flatten selected keys from stats_payload for SQL-friendly queries.
--- Run after catapult_stats_staging.sql. Re-run after changing column list.
+-- Run after catapult_stats_staging.sql and schema/medallion_raw_layer_migration.sql (ingest_id, etl_ingested_at).
+-- Re-run after changing column list.
 -- The base table keeps the full JSONB; this view adds no storage (computed at read time).
 
 -- security_invoker: enforce caller's privileges and RLS on catapult_stats_staging (not the view owner).
@@ -7,10 +8,12 @@ CREATE OR REPLACE VIEW public.catapult_stats_staging_flat
 WITH (security_invoker = true)
 AS
 SELECT
+    s.ingest_id,
     s.activity_id,
     s.athlete_id,
     s.athlete_key,
     s.synced_at,
+    s.etl_ingested_at,
 
     (s.stats_payload->>'date_id') AS date_id,
     (s.stats_payload->>'date_name') AS date_name,

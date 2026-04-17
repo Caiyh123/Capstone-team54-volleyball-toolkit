@@ -6,8 +6,16 @@ import time
 import requests
 from dotenv import load_dotenv
 
+from integrations.catapult.stats_row import athlete_id_from_stats_row, athlete_jersey_from_stats_row
+from integrations.roster_allowlist import (
+    catapult_roster_filters,
+    env_roster_filter_enabled,
+    load_roster_allowlist,
+)
+
 load_dotenv()
 TOKEN = os.getenv("CATAPULT_TOKEN")
+DB_URL = os.getenv("DATABASE_URL", "").strip()
 BASE_URL = os.getenv("CATAPULT_BASE_URL", "https://connect-au.catapultsports.com/api/v6").rstrip("/")
 
 # Default cap on how many activity IDs to process (after GET /activities). Set env to 0 or use --all for no cap.
@@ -94,6 +102,31 @@ def run_bulk_export(limit: int | None) -> None:
         print("[ERROR] Missing token.")
         return
 
+    allow_uuids: set[str] | None = None
+    allow_jerseys_fold: set[str] | None = None
+    if env_roster_filter_enabled():
+        try:
+            _, roster = load_roster_allowlist()
+        except FileNotFoundError as e:
+            print(f"[ERROR] ROSTER_FILTER=1 but roster workbook missing: {e}")
+            return
+        allow_uuids, allow_jerseys_fold = catapult_roster_filters(DB_URL, roster)
+        if not allow_uuids and not allow_jerseys_fold:
+            print(
+                "[ERROR] ROSTER_FILTER=1 but no Catapult filter resolved. "
+                "Add 'Catapult Jerseys' to the roster workbook, or set catapult_athlete_id in athlete_identity."
+            )
+            return
+        if allow_jerseys_fold is not None:
+            print(
+                f"[INFO] ROSTER_FILTER: stats rows limited to {len(allow_jerseys_fold)} jersey code(s) "
+                "(case-insensitive)."
+            )
+        else:
+            print(f"[INFO] ROSTER_FILTER: stats rows limited to {len(allow_uuids or [])} Catapult athlete UUID(s).")
+    else:
+        pass
+
     # 1. Activity IDs from GET /activities (see get_activities docstring for API limits)
     activity_ids = get_activities(limit=limit)
     if not activity_ids:
@@ -111,7 +144,23 @@ def run_bulk_export(limit: int | None) -> None:
         if stats:
             # Add the activity ID to each row so we know where the data came from
             for row in stats:
-                row['source_activity_id'] = act_id
+                row["source_activity_id"] = act_id
+            if allow_jerseys_fold is not None:
+                stats = [
+                    r
+                    for r in stats
+                    if isinstance(r, dict)
+                    and (j := athlete_jersey_from_stats_row(r))
+                    and j.casefold() in allow_jerseys_fold
+                ]
+            elif allow_uuids is not None:
+                stats = [
+                    r
+                    for r in stats
+                    if isinstance(r, dict)
+                    and athlete_id_from_stats_row(r)
+                    and str(athlete_id_from_stats_row(r)).strip().lower() in allow_uuids
+                ]
             all_stats.extend(stats)
             
         # RATE LIMITING: Pause for 1 second so Catapult doesn't block us

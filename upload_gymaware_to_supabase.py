@@ -1,8 +1,8 @@
 """
-Load gymaware_summaries_export.json into public.gymaware_summaries (upsert by reference).
+Load gymaware_summaries_export.json into public.gymaware_summaries (append-only rows).
 
 Prerequisites:
-  1. Run schema/gymaware_summaries.sql in Supabase SQL editor.
+  1. Run schema/gymaware_summaries.sql and schema/medallion_raw_layer_migration.sql in Supabase.
   2. python gymaware_export.py
   3. DATABASE_URL in .env
 
@@ -81,43 +81,20 @@ def map_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-UPSERT_SQL = """
+INSERT_SQL = """
 INSERT INTO public.gymaware_summaries (
     gymaware_reference, recorded, modified, athlete_reference, athlete_name,
     athlete_weight, exercise_name, bar_weight, rep_count, targets,
     height, dip, mean_velocity, peak_velocity, mean_power, peak_power,
     mean_watts_per_kg, peak_watts_per_kg, velocity_zone, activity_name,
-    activity_reference, raw, updated_at
+    activity_reference, raw, updated_at, etl_ingested_at
 ) VALUES (
     %(gymaware_reference)s, %(recorded)s, %(modified)s, %(athlete_reference)s, %(athlete_name)s,
     %(athlete_weight)s, %(exercise_name)s, %(bar_weight)s, %(rep_count)s, %(targets)s,
     %(height)s, %(dip)s, %(mean_velocity)s, %(peak_velocity)s, %(mean_power)s, %(peak_power)s,
     %(mean_watts_per_kg)s, %(peak_watts_per_kg)s, %(velocity_zone)s, %(activity_name)s,
-    %(activity_reference)s, %(raw)s, NOW()
+    %(activity_reference)s, %(raw)s, NOW(), NOW()
 )
-ON CONFLICT (gymaware_reference) DO UPDATE SET
-    recorded = EXCLUDED.recorded,
-    modified = EXCLUDED.modified,
-    athlete_reference = EXCLUDED.athlete_reference,
-    athlete_name = EXCLUDED.athlete_name,
-    athlete_weight = EXCLUDED.athlete_weight,
-    exercise_name = EXCLUDED.exercise_name,
-    bar_weight = EXCLUDED.bar_weight,
-    rep_count = EXCLUDED.rep_count,
-    targets = EXCLUDED.targets,
-    height = EXCLUDED.height,
-    dip = EXCLUDED.dip,
-    mean_velocity = EXCLUDED.mean_velocity,
-    peak_velocity = EXCLUDED.peak_velocity,
-    mean_power = EXCLUDED.mean_power,
-    peak_power = EXCLUDED.peak_power,
-    mean_watts_per_kg = EXCLUDED.mean_watts_per_kg,
-    peak_watts_per_kg = EXCLUDED.peak_watts_per_kg,
-    velocity_zone = EXCLUDED.velocity_zone,
-    activity_name = EXCLUDED.activity_name,
-    activity_reference = EXCLUDED.activity_reference,
-    raw = EXCLUDED.raw,
-    updated_at = NOW()
 """
 
 
@@ -167,7 +144,7 @@ def main() -> None:
                 skipped += 1
                 continue
             try:
-                cur.execute(UPSERT_SQL, mapped)
+                cur.execute(INSERT_SQL, mapped)
                 ok += 1
             except Exception as e:
                 print(f"  [WARNING] skip ref={row.get('reference')}: {e}")
@@ -178,8 +155,8 @@ def main() -> None:
         print(f"[ERROR] Database error: {e}")
         return
 
-    print(f"\n[SUCCESS] Upserted {ok} row(s); skipped {skipped}.")
-    print("[CHECK] Supabase → Table Editor → gymaware_summaries, or run:")
+    print(f"\n[SUCCESS] Inserted {ok} row(s); skipped {skipped}.")
+    print("[CHECK] Supabase -> Table Editor -> gymaware_summaries, or run:")
     print("        SELECT COUNT(*) FROM public.gymaware_summaries;")
 
 

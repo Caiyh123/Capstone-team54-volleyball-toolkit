@@ -1,8 +1,8 @@
 """
-Fetch VALD External Profiles (GET /profiles per tenant) and upsert into public.vald_profiles.
+Fetch VALD External Profiles (GET /profiles per tenant) and append rows to public.vald_profiles.
 
 Prerequisites:
-  1. schema/vald_profiles.sql applied in Supabase.
+  1. schema/vald_profiles.sql and schema/medallion_raw_layer_migration.sql applied in Supabase.
   2. VALD_CLIENT_ID, VALD_CLIENT_SECRET, DATABASE_URL in .env
 
 Run:
@@ -21,6 +21,7 @@ import psycopg2
 from dotenv import load_dotenv
 from psycopg2.extras import Json
 
+from integrations.roster_allowlist import env_roster_filter_enabled, load_roster_allowlist
 from integrations.vald.client import ValdClient
 from integrations.vald.profiles import flatten_vald_profiles_response
 
@@ -28,28 +29,16 @@ load_dotenv()
 
 DB_URL = os.getenv("DATABASE_URL", "").strip()
 
-UPSERT_SQL = """
+INSERT_SQL = """
 INSERT INTO public.vald_profiles (
     tenant_id, profile_id, sync_id, given_name, family_name, date_of_birth,
     external_id, email, group_id, being_merged_with_profile_id,
-    being_merged_with_expiry_utc, raw, updated_at
+    being_merged_with_expiry_utc, raw, updated_at, etl_ingested_at
 ) VALUES (
     %(tenant_id)s, %(profile_id)s, %(sync_id)s, %(given_name)s, %(family_name)s, %(date_of_birth)s,
     %(external_id)s, %(email)s, %(group_id)s, %(being_merged_with_profile_id)s,
-    %(being_merged_with_expiry_utc)s, %(raw)s, NOW()
+    %(being_merged_with_expiry_utc)s, %(raw)s, NOW(), NOW()
 )
-ON CONFLICT (tenant_id, profile_id) DO UPDATE SET
-    sync_id = EXCLUDED.sync_id,
-    given_name = EXCLUDED.given_name,
-    family_name = EXCLUDED.family_name,
-    date_of_birth = EXCLUDED.date_of_birth,
-    external_id = EXCLUDED.external_id,
-    email = EXCLUDED.email,
-    group_id = EXCLUDED.group_id,
-    being_merged_with_profile_id = EXCLUDED.being_merged_with_profile_id,
-    being_merged_with_expiry_utc = EXCLUDED.being_merged_with_expiry_utc,
-    raw = EXCLUDED.raw,
-    updated_at = NOW()
 """
 
 
@@ -127,7 +116,7 @@ def tenant_ids_from_api(client: ValdClient, single: str | None) -> list[str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Upsert VALD profiles into Supabase")
+    parser = argparse.ArgumentParser(description="Append VALD profile rows into Supabase (raw layer)")
     parser.add_argument("--tenant-id", default="", help="Only sync this tenant UUID")
     args = parser.parse_args()
 
@@ -148,6 +137,25 @@ def main() -> int:
 
     print(f"[INFO] Tenants to sync: {len(tids)}")
 
+    allowed_vald: set[str] | None = None
+    if env_roster_filter_enabled():
+        try:
+            _, roster = load_roster_allowlist()
+        except FileNotFoundError as e:
+            print(f"[ERROR] ROSTER_FILTER=1 but roster workbook missing: {e}", file=sys.stderr)
+            return 1
+        allowed_vald = {v.lower() for v in roster.vald_profile_ids}
+        if not allowed_vald:
+            print(
+                "[ERROR] ROSTER_FILTER=1 but roster workbook has no Vald Profile_ID values.",
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            f"[INFO] ROSTER_FILTER: VALD insert limited to {len(allowed_vald)} profile id(s).",
+            file=sys.stderr,
+        )
+
     ok = 0
     skipped = 0
     try:
@@ -167,8 +175,13 @@ def main() -> int:
                 if not mapped:
                     skipped += 1
                     continue
+                if allowed_vald is not None:
+                    pid = str(mapped["profile_id"]).strip().lower()
+                    if pid not in allowed_vald:
+                        skipped += 1
+                        continue
                 try:
-                    cur.execute(UPSERT_SQL, mapped)
+                    cur.execute(INSERT_SQL, mapped)
                     ok += 1
                 except Exception as e:
                     print(f"  [WARNING] profile skip: {e}")
@@ -179,7 +192,7 @@ def main() -> int:
         print(f"[ERROR] Database error: {e}", file=sys.stderr)
         return 1
 
-    print(f"\n[SUCCESS] Upserted {ok} row(s); skipped {skipped}.")
+    print(f"\n[SUCCESS] Inserted {ok} row(s); skipped {skipped}.")
     print("[CHECK] SELECT COUNT(*) FROM public.vald_profiles;")
     return 0
 

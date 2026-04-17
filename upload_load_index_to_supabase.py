@@ -42,9 +42,9 @@ def main() -> int:
         cur.execute(
             """
             INSERT INTO public.catapult_load_index_run (
-                start_date, end_date, sum_player_load, total_jump_count, load_index
+                start_date, end_date, sum_player_load, total_jump_count, load_index, etl_ingested_at
             )
-            VALUES (%s::date, %s::date, %s, %s, %s)
+            VALUES (%s::date, %s::date, %s, %s, %s, NOW())
             RETURNING id
             """,
             (

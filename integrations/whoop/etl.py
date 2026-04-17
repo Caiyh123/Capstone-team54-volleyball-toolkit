@@ -1,4 +1,4 @@
-"""WHOOP to Supabase staging: refresh tokens, paginated pulls, upserts."""
+"""WHOOP to Supabase staging: refresh tokens, paginated pulls, append-only raw inserts."""
 from __future__ import annotations
 
 import os
@@ -57,6 +57,7 @@ def load_token_rows(
     database_url: str,
     *,
     whoop_user_id: str | None = None,
+    allowed_state_labels: set[str] | None = None,
 ) -> list[TokenRow]:
     conn = psycopg2.connect(database_url)
     try:
@@ -92,6 +93,13 @@ def load_token_rows(
                     state_label=r[4],
                 )
             )
+        if allowed_state_labels is not None:
+            allow = {s.strip() for s in allowed_state_labels if s and str(s).strip()}
+            rows = [
+                x
+                for x in rows
+                if x.state_label and str(x.state_label).strip() in allow
+            ]
         cur.close()
         return rows
     finally:
@@ -174,36 +182,25 @@ def _iso_range_utc(*, lookback_days: int) -> tuple[str, str]:
     return start.strftime(fmt), end.strftime(fmt)
 
 
-UPSERT_SLEEP = """
-INSERT INTO public.whoop_sleep_staging (sleep_id, whoop_user_id, payload, synced_at)
-VALUES (%(sleep_id)s, %(whoop_user_id)s, %(payload)s, NOW())
-ON CONFLICT (sleep_id) DO UPDATE SET
-    payload = EXCLUDED.payload,
-    synced_at = NOW()
+# Append-only (Medallion raw): requires schema/medallion_raw_layer_migration.sql applied.
+INSERT_SLEEP = """
+INSERT INTO public.whoop_sleep_staging (sleep_id, whoop_user_id, payload, synced_at, etl_ingested_at)
+VALUES (%(sleep_id)s, %(whoop_user_id)s, %(payload)s, NOW(), NOW())
 """
 
-UPSERT_WORKOUT = """
-INSERT INTO public.whoop_workout_staging (workout_id, whoop_user_id, payload, synced_at)
-VALUES (%(workout_id)s, %(whoop_user_id)s, %(payload)s, NOW())
-ON CONFLICT (workout_id) DO UPDATE SET
-    payload = EXCLUDED.payload,
-    synced_at = NOW()
+INSERT_WORKOUT = """
+INSERT INTO public.whoop_workout_staging (workout_id, whoop_user_id, payload, synced_at, etl_ingested_at)
+VALUES (%(workout_id)s, %(whoop_user_id)s, %(payload)s, NOW(), NOW())
 """
 
-UPSERT_CYCLE = """
-INSERT INTO public.whoop_cycle_staging (whoop_user_id, cycle_id, payload, synced_at)
-VALUES (%(whoop_user_id)s, %(cycle_id)s, %(payload)s, NOW())
-ON CONFLICT (whoop_user_id, cycle_id) DO UPDATE SET
-    payload = EXCLUDED.payload,
-    synced_at = NOW()
+INSERT_CYCLE = """
+INSERT INTO public.whoop_cycle_staging (whoop_user_id, cycle_id, payload, synced_at, etl_ingested_at)
+VALUES (%(whoop_user_id)s, %(cycle_id)s, %(payload)s, NOW(), NOW())
 """
 
-UPSERT_RECOVERY = """
-INSERT INTO public.whoop_recovery_staging (whoop_user_id, cycle_id, payload, synced_at)
-VALUES (%(whoop_user_id)s, %(cycle_id)s, %(payload)s, NOW())
-ON CONFLICT (whoop_user_id, cycle_id) DO UPDATE SET
-    payload = EXCLUDED.payload,
-    synced_at = NOW()
+INSERT_RECOVERY = """
+INSERT INTO public.whoop_recovery_staging (whoop_user_id, cycle_id, payload, synced_at, etl_ingested_at)
+VALUES (%(whoop_user_id)s, %(cycle_id)s, %(payload)s, NOW(), NOW())
 """
 
 
@@ -269,7 +266,7 @@ def sync_sleep(
     if not batch:
         return 0
     with conn.cursor() as cur:
-        execute_batch(cur, UPSERT_SLEEP, batch, page_size=100)
+        execute_batch(cur, INSERT_SLEEP, batch, page_size=100)
     return len(batch)
 
 
@@ -319,7 +316,7 @@ def sync_workout(
     if not batch:
         return 0
     with conn.cursor() as cur:
-        execute_batch(cur, UPSERT_WORKOUT, batch, page_size=100)
+        execute_batch(cur, INSERT_WORKOUT, batch, page_size=100)
     return len(batch)
 
 
@@ -369,7 +366,7 @@ def sync_cycle(
     if not batch:
         return 0
     with conn.cursor() as cur:
-        execute_batch(cur, UPSERT_CYCLE, batch, page_size=100)
+        execute_batch(cur, INSERT_CYCLE, batch, page_size=100)
     return len(batch)
 
 
@@ -419,7 +416,7 @@ def sync_recovery(
     if not batch:
         return 0
     with conn.cursor() as cur:
-        execute_batch(cur, UPSERT_RECOVERY, batch, page_size=100)
+        execute_batch(cur, INSERT_RECOVERY, batch, page_size=100)
     return len(batch)
 
 
@@ -447,6 +444,7 @@ def run_etl(
     resources: list[str],
     whoop_user_id: str | None,
     dry_run: bool,
+    allowed_state_labels: set[str] | None = None,
 ) -> dict[str, Any]:
     """Sync WHOOP data for all linked users (or one). Returns summary dict."""
     start, end = _iso_range_utc(lookback_days=lookback_days)
@@ -457,7 +455,11 @@ def run_etl(
         "users": [],
     }
 
-    rows = load_token_rows(database_url, whoop_user_id=whoop_user_id)
+    rows = load_token_rows(
+        database_url,
+        whoop_user_id=whoop_user_id,
+        allowed_state_labels=allowed_state_labels,
+    )
     if not rows:
         summary["error"] = "No token rows with refresh_token (needs_reconnect=false)."
         return summary

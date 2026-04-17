@@ -7,19 +7,25 @@ import psycopg2
 from dotenv import load_dotenv
 from psycopg2.extras import Json
 
-from integrations.catapult.stats_row import activity_id_from_stats_row, athlete_id_from_stats_row
+from integrations.catapult.stats_row import (
+    activity_id_from_stats_row,
+    athlete_id_from_stats_row,
+    athlete_jersey_from_stats_row,
+)
+from integrations.roster_allowlist import (
+    catapult_roster_filters,
+    env_roster_filter_enabled,
+    load_roster_allowlist,
+)
 
 # 1. Load the secure database URL
 load_dotenv()
 DB_URL = os.getenv("DATABASE_URL")
 
-UPSERT_STATS_SQL = """
-INSERT INTO public.catapult_stats_staging (activity_id, athlete_id, stats_payload, synced_at)
-VALUES (%(activity_id)s::uuid, %(athlete_id)s::uuid, %(stats_payload)s, NOW())
-ON CONFLICT ON CONSTRAINT catapult_stats_staging_pkey DO UPDATE SET
-    stats_payload = EXCLUDED.stats_payload,
-    athlete_id = EXCLUDED.athlete_id,
-    synced_at = NOW()
+# Medallion raw: append-only. Requires schema/medallion_raw_layer_migration.sql (ingest_id PK + etl_ingested_at).
+INSERT_STATS_SQL = """
+INSERT INTO public.catapult_stats_staging (activity_id, athlete_id, stats_payload, synced_at, etl_ingested_at)
+VALUES (%(activity_id)s::uuid, %(athlete_id)s::uuid, %(stats_payload)s, NOW(), NOW())
 """
 
 
@@ -40,6 +46,28 @@ def upload_data() -> int:
     if not DB_URL:
         print("[ERROR] DATABASE_URL not found in your .env file.")
         return 1
+
+    allow_uuids: set[str] | None = None
+    allow_jerseys_fold: set[str] | None = None
+    if env_roster_filter_enabled():
+        try:
+            _, roster = load_roster_allowlist()
+        except FileNotFoundError as e:
+            print(f"[ERROR] ROSTER_FILTER=1 but roster workbook missing: {e}")
+            return 1
+        allow_uuids, allow_jerseys_fold = catapult_roster_filters(DB_URL, roster)
+        if not allow_uuids and not allow_jerseys_fold:
+            print(
+                "[ERROR] ROSTER_FILTER=1 but no Catapult filter resolved. "
+                "Add 'Catapult Jerseys' to the roster workbook, or catapult_athlete_id in athlete_identity."
+            )
+            return 1
+        if allow_jerseys_fold is not None:
+            print(
+                f"[INFO] ROSTER_FILTER: Catapult upload restricted to {len(allow_jerseys_fold)} jersey code(s)."
+            )
+        else:
+            print(f"[INFO] ROSTER_FILTER: Catapult upload restricted to {len(allow_uuids or [])} athlete UUID(s).")
 
     file_path = "catapult_bulk_export.json"
     try:
@@ -68,6 +96,14 @@ def upload_data() -> int:
             activity_id = activity_id_from_stats_row(row)
             athlete_id_str = athlete_id_from_stats_row(row)
 
+            if allow_jerseys_fold is not None:
+                j = athlete_jersey_from_stats_row(row)
+                if not j or j.casefold() not in allow_jerseys_fold:
+                    continue
+            elif allow_uuids is not None:
+                if not athlete_id_str or str(athlete_id_str).strip().lower() not in allow_uuids:
+                    continue
+
             total_distance = row.get("total_distance", 0.0)
             total_player_load = row.get("total_player_load", 0.0)
             field_time = row.get("field_time", 0.0)
@@ -81,7 +117,7 @@ def upload_data() -> int:
             # --- Full JSONB stats (BI)
             try:
                 cursor.execute(
-                    UPSERT_STATS_SQL,
+                    INSERT_STATS_SQL,
                     {
                         "activity_id": str(aid_uuid),
                         "athlete_id": str(ath_uuid) if ath_uuid else None,
@@ -96,14 +132,14 @@ def upload_data() -> int:
                         file=sys.stderr,
                     )
                     return 1
-                print(f"  -> [WARNING] JSONB upsert skipped: {e}")
+                print(f"  -> [WARNING] JSONB insert skipped: {e}")
                 jsonb_skip += 1
 
             # --- Legacy narrow columns (backward compatible)
             insert_query = """
                 INSERT INTO catapult_session_metrics
-                (activity_id, athlete_id, total_distance, total_player_load, field_time)
-                VALUES (%s, %s, %s, %s, %s)
+                (activity_id, athlete_id, total_distance, total_player_load, field_time, etl_ingested_at)
+                VALUES (%s, %s, %s, %s, %s, NOW())
             """
             try:
                 cursor.execute(
@@ -115,7 +151,7 @@ def upload_data() -> int:
                 print(f"  -> [WARNING] Narrow insert skipped: {row_error}")
                 continue
 
-        print(f"\n[SUCCESS] catapult_stats_staging upserted: {jsonb_ok} row(s); skipped: {jsonb_skip}.")
+        print(f"\n[SUCCESS] catapult_stats_staging inserted: {jsonb_ok} row(s); skipped: {jsonb_skip}.")
         print(f"[SUCCESS] catapult_session_metrics inserted: {narrow_ok} row(s).")
         print("[CHECK] SELECT COUNT(*), MAX(synced_at) FROM public.catapult_stats_staging;")
 
