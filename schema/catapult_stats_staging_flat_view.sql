@@ -2,9 +2,14 @@
 -- Run after catapult_stats_staging.sql and schema/medallion_raw_layer_migration.sql (ingest_id, etl_ingested_at).
 -- Re-run after changing column list.
 -- The base table keeps the full JSONB; this view adds no storage (computed at read time).
+--
+-- Postgres does not allow CREATE OR REPLACE VIEW when the new SELECT prepends columns (e.g. ingest_id);
+-- it errors with "cannot change name of view column ...". Drop first, then create.
+
+DROP VIEW IF EXISTS public.catapult_stats_staging_flat CASCADE;
 
 -- security_invoker: enforce caller's privileges and RLS on catapult_stats_staging (not the view owner).
-CREATE OR REPLACE VIEW public.catapult_stats_staging_flat
+CREATE VIEW public.catapult_stats_staging_flat
 WITH (security_invoker = true)
 AS
 SELECT
