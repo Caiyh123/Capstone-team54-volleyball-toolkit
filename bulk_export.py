@@ -7,6 +7,7 @@ import requests
 from dotenv import load_dotenv
 
 from integrations.catapult.stats_row import athlete_id_from_stats_row, athlete_jersey_from_stats_row
+from integrations.config import catapult_base_url
 from integrations.roster_allowlist import (
     catapult_roster_filters,
     env_roster_filter_enabled,
@@ -16,7 +17,7 @@ from integrations.roster_allowlist import (
 load_dotenv()
 TOKEN = os.getenv("CATAPULT_TOKEN")
 DB_URL = os.getenv("DATABASE_URL", "").strip()
-BASE_URL = os.getenv("CATAPULT_BASE_URL", "https://connect-au.catapultsports.com/api/v6").rstrip("/")
+BASE_URL = catapult_base_url()
 
 # Default cap on how many activity IDs to process (after GET /activities). Set env to 0 or use --all for no cap.
 _DEFAULT_LIMIT_RAW = os.getenv("CATAPULT_BULK_EXPORT_LIMIT", "100").strip()

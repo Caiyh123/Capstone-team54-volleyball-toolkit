@@ -2,6 +2,8 @@ import os
 import requests
 from dotenv import load_dotenv
 
+from integrations.config import catapult_base_url
+
 # 1. Load the secret variables from your .env file
 load_dotenv()
 
@@ -9,9 +11,9 @@ load_dotenv()
 TOKEN = os.getenv("CATAPULT_TOKEN")
 
 # 3. Catapult Connect v6 base URL (pick region: connect-au, connect-eu, connect-us, connect-cn)
-BASE_URL = os.getenv("CATAPULT_BASE_URL", "https://connect-au.catapultsports.com/api/v6")
+BASE_URL = catapult_base_url()
 # v6 has no /about; use /athletes as a simple connectivity + auth check
-ENDPOINT = f"{BASE_URL.rstrip('/')}/athletes"
+ENDPOINT = f"{BASE_URL}/athletes"
 
 def run_handshake():
     # Security check: Ensure token is actually loaded

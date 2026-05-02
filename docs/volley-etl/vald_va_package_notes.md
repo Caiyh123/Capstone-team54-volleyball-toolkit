@@ -22,7 +22,8 @@ A VA Power BI template prioritised **test types** such as **CMJ**, **DJ**, **IMT
 ## Implementation in *this* repo
 
 - **Done:** OAuth client credentials, Tenants + Profiles API, `vald_profiles`, `upload_vald_profiles_to_supabase.py`.
-- **Not done:** ForceDecks tests/trials/definitions ingestion—add `VALD_API_BASE_FORCEDECKS` (or per-product env) in `integrations/config.py`, extend `ValdClient` or a dedicated module, and new `schema/*.sql` once field names are frozen from Swagger.
+- **Done (ForceFrame):** `VALD_API_BASE_FORCEFRAME`, `upload_vald_forceframe_tests_to_supabase.py`, `vald_forceframe_tests_staging` (GET `/tests/v2` on ForceFrame host).
+- **Done (ForceDecks, VA package grain):** `VALD_API_BASE_FORCEDECKS`, `ValdClient` GET `/tests`, optional detailed `.../tests/detailed/...` + trials, optional `/resultdefinitions`; `upload_vald_forcedecks_to_supabase.py` + `vald_forcedecks_*_staging` tables. See [vald_volleyball_au_package.md](./vald_volleyball_au_package.md).
 
 ## Related
 

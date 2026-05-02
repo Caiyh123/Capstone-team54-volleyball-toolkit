@@ -45,11 +45,11 @@ Optional for analysts; helps validate metrics before Power BI / warehouse marts.
 ## This repo (Volley)
 
 - Config: `integrations/config.py` (`vald_settings()`), `.env.example`.
-- Client: `integrations/vald/client.py` — OAuth client credentials + cached Bearer; `GET /tenants`, `GET /profiles`.
+- Client: `integrations/vald/client.py` — OAuth client credentials + cached Bearer; tenants/profiles; ForceFrame `/tests/v2`; ForceDecks `/tests`, detailed tests/trials, `/resultdefinitions`.
 - Smoke / export: `python vald_export.py` (add `--profiles` to pull profiles per tenant).
-- Schema: `schema/vald_profiles.sql` — staging for External Profiles; product metrics (ForceDecks, etc.) are separate follow-up tables.
-- Load: after SQL is applied, `python upload_vald_profiles_to_supabase.py` (optional `--tenant-id <uuid>`).
-- VA / ForceDecks **entity model** (definitions → tests → trials, keys, CMJ/DJ/IMTP hints): [vald_va_package_notes.md](./vald_va_package_notes.md).
+- Schema: `schema/vald_profiles.sql` (profiles); optional activity staging: `vald_forceframe_tests_staging.sql`, `vald_forcedecks_*_staging.sql` (see `schema/apply_order.txt`).
+- Load: `upload_vald_profiles_to_supabase.py`; `upload_vald_forceframe_tests_to_supabase.py`; `upload_vald_forcedecks_to_supabase.py` (after DDL). All are wired from `scheduled_etl.py` when env and DDL are present.
+- VA package alignment (Volleyball AU R model vs APIs): [vald_volleyball_au_package.md](./vald_volleyball_au_package.md); entity hints: [vald_va_package_notes.md](./vald_va_package_notes.md).
 
 ---
 

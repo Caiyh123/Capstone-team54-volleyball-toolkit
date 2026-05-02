@@ -31,17 +31,17 @@ Run Python from the **repository root** so `.env` and default paths (e.g. GymAwa
 
 ## Scheduled sync (Windows Task Scheduler)
 
-The script `scripts/run_scheduled_sync.ps1` runs `python scheduled_etl.py --all` from the repo root. That orchestrates, in order:
+The script `scripts/run_scheduled_sync.ps1` runs `python scheduled_etl.py --all --continue-on-error` from the repo root (all sources run; process exits non-zero if any step failed). That orchestrates, in order:
 
 | Source | Scripts |
 |--------|---------|
 | Catapult | `bulk_export.py` → `upload_to_supabase.py` |
 | GymAware | `gymaware_export.py` (rolling UTC window) → `upload_gymaware_to_supabase.py` |
-| VALD | `upload_vald_profiles_to_supabase.py` (optional: `vald_export.py` manually for JSON snapshots) |
+| VALD | `upload_vald_profiles_to_supabase.py` + `upload_vald_forceframe_tests_to_supabase.py` + `upload_vald_forcedecks_to_supabase.py` (optional: `vald_export.py` manually for JSON snapshots) |
 | WHOOP | `whoop_etl.py` |
 | Catapult load index | `load_index.py` (rolling UTC window) → `upload_load_index_to_supabase.py` |
 
-Run the same orchestrator on Linux/macOS with cron: `python scheduled_etl.py --all` (use the venv’s `python` if applicable).
+Run the same orchestrator on Linux/macOS with cron: `python scheduled_etl.py --all --continue-on-error` (use the venv’s `python` if applicable).
 
 1. Set `GYMAWARE_USE_ALLOWLIST=1` in `.env` if exports must be limited to the allowlist workbook.
 2. Place `GymAware API Reference Numbers.xlsx` (or set `GYMAWARE_ALLOWLIST_XLSX`) next to `.env` when allowlist is enabled.
@@ -65,7 +65,12 @@ Use the full list in **`schema/apply_order.txt`** (Catapult base tables, optiona
 Summary:
 
 - **Catapult:** `catapult_session_metrics.sql`, `catapult_stats_staging.sql`; optional `catapult_stats_staging_flat_view.sql`, `catapult_roster_from_stats_view.sql`; `catapult_load_index.sql` if you use load index uploads.
-- **Other sources:** `gymaware_summaries.sql`, `vald_profiles.sql`, `whoop_oauth_tokens.sql`, `whoop_staging.sql`, `athlete_identity.sql` (roster crosswalk; populate separately).
+- **Other sources:** `gymaware_summaries.sql`, `vald_profiles.sql`, optional `vald_forceframe_tests_staging.sql` and `vald_forcedecks_*_staging.sql` if using those uploads, `whoop_oauth_tokens.sql`, `whoop_staging.sql`, `athlete_identity.sql` (roster crosswalk; populate separately).
+
+## GitHub Actions and secrets
+
+- Optional URL env vars (e.g. `CATAPULT_BASE_URL`) should be **unset** or omitted in GitHub Secrets if you want code defaults. An **empty** secret value overrides Python defaults and can produce invalid URLs.
+- Raw staging tables are **append-only**: verify freshness with `ORDER BY etl_ingested_at DESC` or `MAX(etl_ingested_at)`, not only the first page of the Table Editor.
 
 ## GymAware allowlist
 

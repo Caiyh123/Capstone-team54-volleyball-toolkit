@@ -15,7 +15,8 @@ Env (optional defaults for lookback windows):
   SCHEDULED_LOAD_INDEX_LOOKBACK_DAYS
 
 Load index: after load_index.py, runs upload_load_index_to_supabase.py (needs DATABASE_URL).
-VALD: upload_vald_profiles_to_supabase.py only (one API pass). For JSON snapshots, run vald_export.py manually.
+VALD: vald_export + profile upload + optional ForceFrame tests + optional ForceDecks (VA package grain).
+  VALD_SKIP_FORCEFRAME_TESTS=1 skips ForceFrame only; VALD_SKIP_FORCEDECKS=1 skips ForceDecks only.
 """
 from __future__ import annotations
 
@@ -104,7 +105,29 @@ def run_vald(tenant_id: str | None) -> int:
     up: list[Path | str] = [ROOT / "upload_vald_profiles_to_supabase.py"]
     if tenant_id:
         up.extend(["--tenant-id", tenant_id])
-    return _run_step("VALD profiles upload", up)
+    rc = _run_step("VALD profiles upload", up)
+    if rc != 0:
+        return rc
+    skip_ff = os.getenv("VALD_SKIP_FORCEFRAME_TESTS", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    if not skip_ff:
+        ff_cmd: list[Path | str] = [ROOT / "upload_vald_forceframe_tests_to_supabase.py"]
+        if tenant_id:
+            ff_cmd.extend(["--tenant-id", tenant_id])
+        rc = _run_step("VALD ForceFrame tests (activity) upload", ff_cmd)
+        if rc != 0:
+            return rc
+
+    skip_fd = os.getenv("VALD_SKIP_FORCEDECKS", "").strip().lower() in ("1", "true", "yes")
+    if skip_fd:
+        return 0
+    fd_cmd: list[Path | str] = [ROOT / "upload_vald_forcedecks_to_supabase.py"]
+    if tenant_id:
+        fd_cmd.extend(["--tenant-id", tenant_id])
+    return _run_step("VALD ForceDecks (tests/trials) upload", fd_cmd)
 
 
 def run_whoop(lookback: int, resources: str, dry_run: bool) -> int:
@@ -192,7 +215,8 @@ def main() -> int:
     parser.add_argument(
         "--continue-on-error",
         action="store_true",
-        help="Run remaining sources after a failure (default: stop on first non-zero exit)",
+        help="Run remaining sources after a failure (default: stop on first non-zero exit). "
+        "Exit code is still non-zero if any source failed.",
     )
     args = parser.parse_args()
 
@@ -255,10 +279,8 @@ def main() -> int:
 
     print("\n" + json.dumps(summary, indent=2), flush=True)
 
-    # With --continue-on-error we still run every source; treat orchestration as success
-    # so CI does not fail the workflow when one vendor API errors (see summary JSON).
-    if args.continue_on_error:
-        return 0
+    # --continue-on-error only controls whether we stop after the first failure; the process
+    # should still exit non-zero if any step failed so CI / schedulers reflect real pipeline health.
     return 0 if not failed else 1
 
 

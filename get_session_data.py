@@ -3,10 +3,12 @@ import json
 import requests
 from dotenv import load_dotenv
 
+from integrations.config import catapult_base_url
+
 # Load environment variables
 load_dotenv()
 TOKEN = os.getenv("CATAPULT_TOKEN")
-BASE_URL = os.getenv("CATAPULT_BASE_URL", "https://connect-au.catapultsports.com/api/v6")
+BASE_URL = catapult_base_url()
 
 # Paste an Activity ID here, or set ACTIVITY_ID in .env
 ACTIVITY_ID = os.getenv("ACTIVITY_ID", "83a45bab-141d-4d90-a247-77b4b335c818")

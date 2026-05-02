@@ -20,10 +20,10 @@ function Write-Log($msg) {
     Write-Host $line
 }
 
-Write-Log "START scheduled_etl.py --all root=$Root"
+Write-Log "START scheduled_etl.py --all --continue-on-error root=$Root"
 
 try {
-    python scheduled_etl.py --all 2>&1 | Tee-Object -FilePath $Log -Append
+    python scheduled_etl.py --all --continue-on-error 2>&1 | Tee-Object -FilePath $Log -Append
     if ($LASTEXITCODE -ne 0) {
         Write-Log "FAIL: scheduled_etl.py exit code $LASTEXITCODE"
         exit $LASTEXITCODE

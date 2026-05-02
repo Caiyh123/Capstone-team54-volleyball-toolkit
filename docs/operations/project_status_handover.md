@@ -27,9 +27,10 @@ Snapshot for the team: what is working in the repo, how to run it, and what rema
 
 ### VALD
 
-- **Client:** `integrations/vald/client.py` — OAuth client credentials, tenants/profiles.
-- **Load:** `upload_vald_profiles_to_supabase.py` — upserts into `public.vald_profiles`.
+- **Client:** `integrations/vald/client.py` — OAuth client credentials; tenants/profiles; ForceFrame test summaries; ForceDecks tests, detailed tests/trials (team-scoped), result definitions.
+- **Load:** `upload_vald_profiles_to_supabase.py` → `public.vald_profiles`. Optional append-only activity: `upload_vald_forceframe_tests_to_supabase.py`, `upload_vald_forcedecks_to_supabase.py` (see `schema/vald_forceframe_tests_staging.sql`, `schema/vald_forcedecks_*.sql`).
 - **Smoke/export:** `vald_export.py`.
+- **Docs:** `docs/volley-etl/vald_volleyball_au_package.md`, `vald_onboarding.md`.
 
 ### WHOOP (direct Developer API)
 
@@ -40,9 +41,10 @@ Snapshot for the team: what is working in the repo, how to run it, and what rema
 
 ### Scheduled multi-source pipeline
 
-- **Orchestrator:** `scheduled_etl.py` — Catapult → GymAware → VALD profile upload → WHOOP ETL → `load_index.py` → **`upload_load_index_to_supabase.py`** (or subsets via `--sources`). VALD uses `upload_vald_profiles_to_supabase.py` only (no duplicate `vald_export.py` in the schedule).
-- **Windows Task Scheduler:** `scripts/run_scheduled_sync.ps1` calls `scheduled_etl.py --all`; logs under `logs/`.
-- **Docs:** `docs/operations/runbook.md`, README “Main Python entrypoints”.
+- **Orchestrator:** `scheduled_etl.py` — Catapult → GymAware → VALD (export snapshot → profiles → optional ForceFrame → optional ForceDecks) → WHOOP ETL → `load_index.py` → **`upload_load_index_to_supabase.py`** (or subsets via `--sources`). Exit code is non-zero if any step failed (even with `--continue-on-error`, which still runs all sources).
+- **Windows Task Scheduler:** `scripts/run_scheduled_sync.ps1` calls `scheduled_etl.py --all --continue-on-error`; logs under `logs/`.
+- **GitHub Actions:** `.github/workflows/daily_etl.yml` — same pattern; read job log JSON for `failed` steps.
+- **Docs:** `docs/operations/runbook.md`, README “Main Python entrypoints”, `README_HANDOVER.md`.
 
 ### Identity (schema only)
 

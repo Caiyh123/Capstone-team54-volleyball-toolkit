@@ -6,6 +6,9 @@ Suggested order for Supabase SQL Editor (adjust if tables already exist).
    (optional) catapult_load_index.sql — Load Index runs + per-activity breakdown (load_index.py + upload)
 3. gymaware_summaries.sql
 4. vald_profiles.sql
+   (optional) vald_forceframe_tests_staging.sql — ForceFrame GET /tests/v2 (activity metrics)
+   (optional) vald_forcedecks_tests_staging.sql, vald_forcedecks_trials_staging.sql,
+              vald_forcedecks_result_definitions_staging.sql — ForceDecks (VA package grain)
 5. whoop_oauth_tokens.sql
 6. whoop_staging.sql
 7. athlete_identity.sql

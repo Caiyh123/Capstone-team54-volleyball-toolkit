@@ -7,7 +7,7 @@ Jump count uses the same source as `Jump Data - BEACH VB.R`:
 GET .../activities/{id}/athletes/{aid}/events?event_types=basketball
 Rows with jump_attribute > 0 after data/basketball unnesting logic.
 
-Requires: CATAPULT_TOKEN, CATAPULT_BASE_URL in .env
+Requires: CATAPULT_TOKEN; optional CATAPULT_BASE_URL in .env (blank falls back to AU v6 default).
 
 Run:
   python load_index.py --start 2026-03-01 --end 2026-03-28

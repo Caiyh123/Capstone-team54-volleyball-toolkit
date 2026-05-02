@@ -102,6 +102,28 @@ This document lists **Supabase tables and columns** that the Python ETL in this 
 | `updated_at` | TIMESTAMPTZ | `upload_vald_profiles_to_supabase.py` (`NOW()`) | |
 | `etl_ingested_at` | TIMESTAMPTZ | `upload_vald_profiles_to_supabase.py` (`NOW()`) | Append-only audit |
 
+### `public.vald_forceframe_tests_staging`
+
+| Column | Type | Written by | Notes |
+|--------|------|------------|--------|
+| `ingest_id` | BIGSERIAL | DB default | PK |
+| `test_id` | TEXT | `upload_vald_forceframe_tests_to_supabase.py` | Natural key (with `tenant_id`) |
+| `tenant_id` | TEXT | upload script | |
+| `raw` | JSONB | upload script | Full ForceFrame `/tests/v2` row |
+| `etl_ingested_at` | TIMESTAMPTZ | upload script | Append-only audit |
+
+### `public.vald_forcedecks_tests_staging`, `vald_forcedecks_trials_staging`, `vald_forcedecks_result_definitions_staging`
+
+| Column | Type | Written by | Notes |
+|--------|------|------------|--------|
+| `ingest_id` | BIGSERIAL | DB default | PK |
+| Natural keys | TEXT | `upload_vald_forcedecks_to_supabase.py` | `test_id` / trial keys / `definition_id` per table |
+| `tenant_id` | TEXT | upload script | |
+| `raw` | JSONB | upload script | Full API payload |
+| `etl_ingested_at` | TIMESTAMPTZ | upload script | Append-only audit |
+
+See `schema/vald_forcedecks_*.sql` for exact columns.
+
 ---
 
 ## WHOOP

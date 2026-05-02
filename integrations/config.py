@@ -17,9 +17,11 @@ def catapult_token() -> str:
 
 
 def catapult_base_url() -> str:
-    return os.getenv(
-        "CATAPULT_BASE_URL", "https://connect-au.catapultsports.com/api/v6"
-    ).rstrip("/")
+    """Catapult Connect v6 API root. Blank env (e.g. empty GitHub secret) uses AU default."""
+    raw = os.getenv("CATAPULT_BASE_URL", "").strip()
+    if not raw:
+        raw = "https://connect-au.catapultsports.com/api/v6"
+    return raw.rstrip("/")
 
 
 def gymaware_token() -> str:
@@ -57,6 +59,11 @@ def vald_config() -> dict:
     }
 
 
+def _vald_base(env_name: str, default_url: str) -> str:
+    raw = os.getenv(env_name, "").strip()
+    return raw if raw else default_url
+
+
 def vald_settings() -> dict[str, str]:
     """
     VALD OAuth + regional API bases.
@@ -79,6 +86,16 @@ def vald_settings() -> dict[str, str]:
             "VALD_API_BASE_PROFILE",
             "https://prd-aue-api-externalprofile.valdperformance.com",
         ).strip(),
+        # Force plate test summaries (GET /tests/v2) — not the Profiles API.
+        "api_base_forceframe": _vald_base(
+            "VALD_API_BASE_FORCEFRAME",
+            "https://prd-aue-api-externalforceframe.valdperformance.com",
+        ),
+        # ForceDecks (dual-plate) — valdr / VA Uni package; Swagger v2019q3 on same host.
+        "api_base_forcedecks": _vald_base(
+            "VALD_API_BASE_FORCEDECKS",
+            "https://prd-aue-api-extforcedecks.valdperformance.com",
+        ),
     }
 
 

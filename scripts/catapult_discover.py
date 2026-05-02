@@ -14,10 +14,17 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
 from typing import Any
 
 import requests
 from dotenv import load_dotenv
+
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from integrations.config import catapult_base_url  # noqa: E402
 
 load_dotenv()
 
@@ -63,7 +70,7 @@ def main() -> int:
     args = parser.parse_args()
 
     token = os.getenv("CATAPULT_TOKEN", "").strip()
-    base = os.getenv("CATAPULT_BASE_URL", "https://connect-au.catapultsports.com/api/v6").rstrip("/")
+    base = catapult_base_url()
     if not token:
         print("[ERROR] CATAPULT_TOKEN missing.", file=sys.stderr)
         return 1
