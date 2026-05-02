@@ -106,6 +106,11 @@ def _tests_payload(data: Any) -> list[dict[str, Any]]:
     return []
 
 
+def _uuid_str(u: uuid.UUID | None) -> str | None:
+    """psycopg2 (without register_uuid) cannot adapt uuid.UUID; pass text for ::uuid casts."""
+    return str(u) if u is not None else None
+
+
 def map_test_row(item: dict[str, Any]) -> dict[str, Any] | None:
     tid = _parse_uuid(item.get("testId"))
     if tid is None:
@@ -114,10 +119,10 @@ def map_test_row(item: dict[str, Any]) -> dict[str, Any] | None:
     if ten is None:
         return None
     return {
-        "tenant_id": ten,
-        "test_id": tid,
-        "profile_id": _parse_uuid(item.get("profileId")),
-        "recording_id": _parse_uuid(item.get("recordingId")),
+        "tenant_id": _uuid_str(ten),
+        "test_id": _uuid_str(tid),
+        "profile_id": _uuid_str(_parse_uuid(item.get("profileId"))),
+        "recording_id": _uuid_str(_parse_uuid(item.get("recordingId"))),
         "test_type": item.get("testType"),
         "modified_date_utc": _parse_ts(item.get("modifiedDateUtc")),
         "recorded_date_utc": _parse_ts(item.get("recordedDateUtc")),
@@ -271,10 +276,10 @@ def main() -> int:
                             cur.execute(
                                 INSERT_TRIAL,
                                 {
-                                    "team_id": team_uuid,
-                                    "test_id": test_uid,
-                                    "trial_id": trial_uid,
-                                    "athlete_id": ath,
+                                    "team_id": _uuid_str(team_uuid),
+                                    "test_id": _uuid_str(test_uid),
+                                    "trial_id": _uuid_str(trial_uid),
+                                    "athlete_id": _uuid_str(ath),
                                     "payload": Json(tr),
                                 },
                             )
