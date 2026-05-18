@@ -158,6 +158,25 @@ class GymAwareClient:
         raw = self._get("/activities")
         return raw if isinstance(raw, list) else ([raw] if isinstance(raw, dict) else [])
 
+    def list_bests(
+        self,
+        *,
+        start: float | None = None,
+        end: float | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        GET /bests — personal best per athlete, exercise, bar weight.
+        Docs: max ~3 months per request when using start/end (same Basic auth as summaries).
+        Export chunks windows via GYMAWARE_BESTS_CHUNK_DAYS (default 90) in gymaware_export.py.
+        """
+        params: dict[str, Any] = {}
+        if start is not None:
+            params["start"] = start
+        if end is not None:
+            params["end"] = end
+        raw = self._get("/bests", params=params if params else None)
+        return raw if isinstance(raw, list) else ([] if raw is None else [raw])  # type: ignore[list-item]
+
 
 def test_athlete_sport_lookup(
     summaries_path: str | None = None,

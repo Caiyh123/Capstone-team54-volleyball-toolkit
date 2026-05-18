@@ -45,7 +45,7 @@ Optional scheduling / behavior:
 | `SCHEDULED_LOAD_INDEX_LOOKBACK_DAYS` | Load index date window |
 | `SCHEDULED_VALD_FORCEFRAME_LOOKBACK_DAYS` / `SCHEDULED_VALD_FORCEDECKS_LOOKBACK_DAYS` | VALD activity pull windows (defaults fall back to 7) |
 
-**Roster workbook:** The repo includes **`data/roster/allowlist.xlsx`** for GitHub Actions (`ROSTER_FILTER=1` + `ROSTER_ALLOWLIST_XLSX` in `.github/workflows/daily_etl.yml`). For local runs with the same file, set `ROSTER_ALLOWLIST_XLSX=data/roster/allowlist.xlsx` in `.env`. Alternatively, keep `Updated Athelete Reference IDs.xlsx` in the toolkit root or parent folder and point `ROSTER_ALLOWLIST_XLSX` at it. Without a resolvable file when filtering is on, ETL exits with an error.
+**Roster workbook:** The repo includes **`data/roster/roster_new.xlsx`** (WHOOP IDs + platform IDs). GitHub Actions and `scheduled_etl.py` use it automatically (`ROSTER_ALLOWLIST_XLSX=data/roster/roster_new.xlsx`, `ROSTER_FILTER=1`). Coaches download/edit/import per `data/roster/README.md` — they do not use `.env`. Update the committed file when the roster changes.
 
 ## 3. Supabase DDL (once per project)
 

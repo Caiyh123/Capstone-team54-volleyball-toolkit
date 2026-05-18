@@ -64,17 +64,35 @@ Use the full list in **`schema/apply_order.txt`** (Catapult base tables, optiona
 
 Summary:
 
-- **Catapult:** `catapult_session_metrics.sql`, `catapult_stats_staging.sql`; optional `catapult_stats_staging_flat_view.sql`, `catapult_roster_from_stats_view.sql`; `catapult_load_index.sql` if you use load index uploads.
-- **Other sources:** `gymaware_summaries.sql`, `vald_profiles.sql`, optional `vald_forceframe_tests_staging.sql` and `vald_forcedecks_*_staging.sql` if using those uploads, `whoop_oauth_tokens.sql`, `whoop_staging.sql`, `athlete_identity.sql` (roster crosswalk; populate separately).
+- **Catapult:** `catapult_session_metrics.sql`, `catapult_stats_staging.sql`; optional `catapult_stats_staging_flat_view.sql`, `catapult_stats_bi_extract.sql` (BI scalar table filled by `upload_to_supabase.py`), `catapult_roster_from_stats_view.sql`; `catapult_load_index.sql` if you use load index uploads.
+- **Other sources:** `gymaware_summaries.sql`, optional **`gymaware_extended.sql`** (reps/athletes/bests + BI extract), `vald_profiles.sql`, optional `vald_forceframe_tests_staging.sql` and `vald_forcedecks_*_staging.sql` if using those uploads, `whoop_oauth_tokens.sql`, `whoop_staging.sql`, optional **`whoop_bi_extract.sql`** (after medallion migration; flat WHOOP columns + triggers), `athlete_identity.sql` (roster crosswalk; populate separately).
 
 ## GitHub Actions and secrets
 
 - Optional URL env vars (e.g. `CATAPULT_BASE_URL`) should be **unset** or omitted in GitHub Secrets if you want code defaults. An **empty** secret value overrides Python defaults and can produce invalid URLs.
 - Raw staging tables are **append-only**: verify freshness with `ORDER BY etl_ingested_at DESC` or `MAX(etl_ingested_at)`, not only the first page of the Table Editor.
 
+## Roster workbook (coaches edit Excel)
+
+**Committed roster (online ETL):** `data/roster/roster_new.xlsx` in the GitHub repo. GitHub Actions sets `ROSTER_ALLOWLIST_XLSX=data/roster/roster_new.xlsx`; `scheduled_etl.py` syncs it to Supabase before vendor pulls. Coach handoff: see `data/roster/ROSTER_FOR_COACHES.md`.
+
+**Local / manual sync** (optional if not running full scheduled ETL):
+
+```powershell
+python scripts/sync_roster_cohort_from_xlsx.py
+python scripts/sync_athlete_identity_from_xlsx.py
+```
+
+- `roster_cohort` — cohort filtering for `*_roster` views and ETL allowlist (`ROSTER_FILTER=1`).
+- `athlete_identity` — Global Athlete ID (`internal_key`, default `VB-{GymAware API ID}` unless a **Global Athlete ID** column is present) plus all vendor IDs for future Gold-layer joins.
+
 ## GymAware allowlist
 
 When `GYMAWARE_USE_ALLOWLIST=1` (or `python gymaware_export.py --allowlist`), only rows whose `athleteReference` appears in the workbook are written to JSON and (for upload) sent to Postgres. Use `--no-allowlist` for a full export regardless of `.env`.
+
+## GymAware `/bests` date chunks
+
+`gymaware_export.py` splits long backfills for `GET /bests` into windows of **90 days** (under the API’s ~3-month limit per request). Summaries and reps still use **28-day** chunks. To use a different window (e.g. if GymAware changes limits or you want smaller requests), set **`GYMAWARE_BESTS_CHUNK_DAYS`** in `.env` before export.
 
 ## WHOOP Auth Bridge (FastAPI)
 

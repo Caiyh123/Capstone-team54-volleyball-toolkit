@@ -35,6 +35,17 @@ This document lists **Supabase tables and columns** that the Python ETL in this 
 | `synced_at` | TIMESTAMPTZ | `upload_to_supabase.py` (`NOW()`) | |
 | `etl_ingested_at` | TIMESTAMPTZ | `upload_to_supabase.py` (`NOW()`) | Append-only audit |
 
+### `public.catapult_stats_bi_extract`
+
+| Column | Type | Written by | Notes |
+|--------|------|------------|--------|
+| `id` | BIGSERIAL | DB default | PK |
+| `activity_id`, `athlete_id`, `athlete_key` | UUID | `upload_to_supabase.py` | Same grain as the parent staging row |
+| `source_staging_ingest_id` | BIGINT | `upload_to_supabase.py` | Lineage to `catapult_stats_staging.ingest_id` |
+| Scalar context, time, HR, velocity, load, jump, IMA columns | TEXT / DOUBLE PRECISION | `upload_to_supabase.py` | Parsed from `stats_payload`; full list in `schema/catapult_stats_bi_extract.sql` |
+| `vendor_synced_at` | TIMESTAMPTZ | `upload_to_supabase.py` | Copied from staging `synced_at` at extract time |
+| `etl_ingested_at` | TIMESTAMPTZ | `upload_to_supabase.py` (`NOW()`) | Append-only |
+
 ### `public.catapult_load_index_run`
 
 | Column | Type | Written by | Notes |
@@ -83,6 +94,14 @@ This document lists **Supabase tables and columns** that the Python ETL in this 
 | `created_at` | TIMESTAMPTZ | DB default | |
 | `updated_at` | TIMESTAMPTZ | `upload_gymaware_to_supabase.py` (`NOW()`) | |
 | `etl_ingested_at` | TIMESTAMPTZ | `upload_gymaware_to_supabase.py` (`NOW()`) | Append-only audit |
+
+### `public.gymaware_summaries_bi_extract`, `gymaware_rep_bi_extract`, `gymaware_athletes_bi_extract`, `gymaware_bests_bi_extract`
+
+Flat BI columns from `/summaries`, `/reps` (one row per rep), `/athletes`, `/bests`. Populated by `upload_gymaware_to_supabase.py` after `schema/gymaware_extended.sql`. Roster filter when `ROSTER_FILTER=1`. `/bests` export uses 90-day API windows by default (`GYMAWARE_BESTS_CHUNK_DAYS` — alter in `.env` as needed).
+
+### `public.gymaware_reps_staging`, `gymaware_athletes_staging`, `gymaware_bests_staging`
+
+Append-only JSONB from GymAware API (`schema/gymaware_extended.sql`).
 
 ---
 
@@ -154,6 +173,16 @@ See `schema/vald_forcedecks_*.sql` for exact columns.
 | `synced_at` | TIMESTAMPTZ | `integrations/whoop/etl.py` (`NOW()`) | |
 | `etl_ingested_at` | TIMESTAMPTZ | `integrations/whoop/etl.py` (`NOW()`) | Append-only audit |
 
+### `public.whoop_sleep_bi_extract`, `whoop_workout_bi_extract`, `whoop_recovery_bi_extract`, `whoop_cycle_bi_extract`
+
+| Column | Type | Written by | Notes |
+|--------|------|------------|--------|
+| `id` | BIGSERIAL | DB default | PK |
+| Natural keys + scalar metrics | various | **Trigger** on corresponding `whoop_*_staging` AFTER INSERT | Flattened from `payload` for BI; see `schema/whoop_bi_extract.sql` |
+| `source_staging_ingest_id` | BIGINT | Trigger | `ingest_id` of parent staging row |
+| `vendor_synced_at` | TIMESTAMPTZ | Trigger | From staging `synced_at` |
+| `etl_ingested_at` | TIMESTAMPTZ | Trigger (`NOW()`) | |
+
 ### `public.whoop_etl_run`
 
 | Column | Type | Written by | Notes |
@@ -175,7 +204,7 @@ Maintained by `scripts/sync_roster_cohort_from_xlsx.py` (UPSERT on `gymaware_ath
 
 ### `public.athlete_identity`
 
-Populated manually or by your process; not filled by the scheduled vendor ETL scripts in this repo. See `schema/athlete_identity.sql`.
+Populated from the client roster workbook: `python scripts/sync_athlete_identity_from_xlsx.py` (after coaches edit `roster_new.xlsx`). Not filled by vendor ETL. See `schema/athlete_identity.sql`. `internal_key` is the Global Athlete ID (default `VB-{gymaware_ref}`).
 
 ---
 
@@ -184,7 +213,7 @@ Populated manually or by your process; not filled by the scheduled vendor ETL sc
 | View | Purpose |
 |------|---------|
 | `public.catapult_stats_staging_flat` | Scalar fields from Catapult JSONB + `ingest_id` / `etl_ingested_at` |
-| `public.intermediate_big_table` | **(A)** Catapult stats rows + identity/roster + same-day GymAware/WHOOP. **(B)** `UNION`: roster rows with no Catapult jersey — Catapult columns NULL; VALD/GymAware from roster + staging; WHOOP if `athlete_identity.whoop_user_id` is set |
+| `public.*_bi_extract` | Flat vendor facts for Power BI (join via `athlete_identity` / `roster_cohort`) |
 | `public.*_roster` | Cohort-scoped vendor views (`schema/roster_filtered_views.sql`) |
 
 ---

@@ -26,6 +26,72 @@ DB_URL = os.getenv("DATABASE_URL")
 INSERT_STATS_SQL = """
 INSERT INTO public.catapult_stats_staging (activity_id, athlete_id, stats_payload, synced_at, etl_ingested_at)
 VALUES (%(activity_id)s::uuid, %(athlete_id)s::uuid, %(stats_payload)s, NOW(), NOW())
+RETURNING ingest_id
+"""
+
+# One BI row per staging row. Requires schema/catapult_stats_bi_extract.sql applied in Supabase.
+INSERT_BI_EXTRACT_SQL = """
+INSERT INTO public.catapult_stats_bi_extract (
+    activity_id, athlete_id, athlete_key, source_staging_ingest_id,
+    participating_athlete_id, source_activity_id,
+    athlete_jersey, team_name, activity_name, period_name, stats_date, date_id, date_name,
+    start_time, end_time, field_time, bench_time, duration,
+    max_vel, athlete_max_velocity, percentage_max_velocity,
+    max_heart_rate, min_heart_rate, athlete_max_hr, percentage_max_heart_rate, percentage_avg_heart_rate,
+    total_player_load, player_load_per_minute, peak_player_load, total_2d_player_load,
+    total_jumps, indoor_analytics_total_jump_count, jumps_per_minute, high_jump_per_minute, high_jumps_p_per_minute,
+    ima_band1_jump_count, ima_band2_jump_count, ima_band3_jump_count, ima_band4_jump_count,
+    ima_band5_jump_count, ima_band6_jump_count, ima_band7_jump_count, ima_band8_jump_count,
+    vendor_synced_at, etl_ingested_at
+)
+SELECT
+    s.activity_id,
+    s.athlete_id,
+    s.athlete_key,
+    s.ingest_id,
+    (NULLIF(TRIM(s.stats_payload->'participating_athlete'->>'id'), ''))::uuid,
+    (NULLIF(TRIM(s.stats_payload->>'source_activity_id'), ''))::uuid,
+    s.stats_payload->>'athlete_jersey',
+    s.stats_payload->>'team_name',
+    s.stats_payload->>'activity_name',
+    s.stats_payload->>'period_name',
+    s.stats_payload->>'date',
+    s.stats_payload->>'date_id',
+    s.stats_payload->>'date_name',
+    (s.stats_payload->>'start_time')::double precision,
+    (s.stats_payload->>'end_time')::double precision,
+    (s.stats_payload->>'field_time')::double precision,
+    (s.stats_payload->>'bench_time')::double precision,
+    (s.stats_payload->>'duration')::double precision,
+    (s.stats_payload->>'max_vel')::double precision,
+    (s.stats_payload->>'athlete_max_velocity')::double precision,
+    (s.stats_payload->>'percentage_max_velocity')::double precision,
+    (s.stats_payload->>'max_heart_rate')::double precision,
+    (s.stats_payload->>'min_heart_rate')::double precision,
+    (s.stats_payload->>'athlete_max_hr')::double precision,
+    (s.stats_payload->>'percentage_max_heart_rate')::double precision,
+    (s.stats_payload->>'percentage_avg_heart_rate')::double precision,
+    (s.stats_payload->>'total_player_load')::double precision,
+    (s.stats_payload->>'player_load_per_minute')::double precision,
+    (s.stats_payload->>'peak_player_load')::double precision,
+    (s.stats_payload->>'total_2d_player_load')::double precision,
+    (s.stats_payload->>'total_jumps')::double precision,
+    (s.stats_payload->>'indoor_analytics_total_jump_count')::double precision,
+    (s.stats_payload->>'jumps/minute')::double precision,
+    (s.stats_payload->>'high_jump/min')::double precision,
+    (s.stats_payload->>'high_jumps_p/min')::double precision,
+    (s.stats_payload->>'ima_band1_jump_count')::double precision,
+    (s.stats_payload->>'ima_band2_jump_count')::double precision,
+    (s.stats_payload->>'ima_band3_jump_count')::double precision,
+    (s.stats_payload->>'ima_band4_jump_count')::double precision,
+    (s.stats_payload->>'ima_band5_jump_count')::double precision,
+    (s.stats_payload->>'ima_band6_jump_count')::double precision,
+    (s.stats_payload->>'ima_band7_jump_count')::double precision,
+    (s.stats_payload->>'ima_band8_jump_count')::double precision,
+    s.synced_at,
+    NOW()
+FROM public.catapult_stats_staging s
+WHERE s.ingest_id = %(ingest_id)s
 """
 
 
@@ -88,6 +154,9 @@ def upload_data() -> int:
         narrow_ok = 0
         jsonb_ok = 0
         jsonb_skip = 0
+        bi_ok = 0
+        bi_skip = 0
+        bi_warned = False
 
         for row in data:
             if not isinstance(row, dict):
@@ -115,6 +184,7 @@ def upload_data() -> int:
                 continue
 
             # --- Full JSONB stats (BI)
+            ingest_id = None
             try:
                 cursor.execute(
                     INSERT_STATS_SQL,
@@ -124,6 +194,13 @@ def upload_data() -> int:
                         "stats_payload": _stats_payload_jsonb(row),
                     },
                 )
+                row_ret = cursor.fetchone()
+                if not row_ret or row_ret[0] is None:
+                    raise RuntimeError(
+                        "catapult_stats_staging INSERT returned no ingest_id. "
+                        "Apply schema/medallion_raw_layer_migration.sql (ingest_id + PK on ingest_id)."
+                    )
+                ingest_id = int(row_ret[0])
                 jsonb_ok += 1
             except Exception as e:
                 if "catapult_stats_staging" in str(e) or "does not exist" in str(e).lower():
@@ -134,6 +211,22 @@ def upload_data() -> int:
                     return 1
                 print(f"  -> [WARNING] JSONB insert skipped: {e}")
                 jsonb_skip += 1
+                ingest_id = None
+
+            if ingest_id is not None:
+                try:
+                    cursor.execute(INSERT_BI_EXTRACT_SQL, {"ingest_id": ingest_id})
+                    bi_ok += 1
+                except Exception as bi_e:
+                    bi_skip += 1
+                    if not bi_warned:
+                        print(
+                            "[WARN] catapult_stats_bi_extract insert failed (missing table, bad UUID in payload, "
+                            "or SQL error). Staging row is still saved. Apply schema/catapult_stats_bi_extract.sql "
+                            f"or inspect payloads. First error: {bi_e}",
+                            file=sys.stderr,
+                        )
+                        bi_warned = True
 
             # --- Legacy narrow columns (backward compatible)
             insert_query = """
@@ -152,6 +245,9 @@ def upload_data() -> int:
                 continue
 
         print(f"\n[SUCCESS] catapult_stats_staging inserted: {jsonb_ok} row(s); skipped: {jsonb_skip}.")
+        print(
+            f"[SUCCESS] catapult_stats_bi_extract inserted: {bi_ok} row(s); skipped: {bi_skip}."
+        )
         print(f"[SUCCESS] catapult_session_metrics inserted: {narrow_ok} row(s).")
         print("[CHECK] SELECT COUNT(*), MAX(synced_at) FROM public.catapult_stats_staging;")
 

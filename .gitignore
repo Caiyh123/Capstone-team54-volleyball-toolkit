@@ -223,6 +223,8 @@ vald_snapshot.json
 catapult_bulk_export.json
 gymaware_summaries_export.json
 gymaware_reps_export.json
+gymaware_athletes_export.json
+gymaware_bests_export.json
 load_index_result.json
 jump_spreadsheet.xlsx
 exports/

@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS public.athlete_identity (
     internal_key TEXT NOT NULL,
     display_name TEXT,
     catapult_athlete_id TEXT,
-    gymaware_athlete_reference INTEGER,
+    gymaware_athlete_reference BIGINT,
     vald_profile_id TEXT,
     whoop_user_id TEXT,
     teamworks_athlete_id TEXT,

@@ -12,7 +12,7 @@ Examples:
 
 Env (optional defaults for lookback windows):
   SCHEDULED_GYMAWARE_LOOKBACK_DAYS, SCHEDULED_WHOOP_LOOKBACK_DAYS,
-  SCHEDULED_LOAD_INDEX_LOOKBACK_DAYS
+  SCHEDULED_LOAD_INDEX_LOOKBACK_DAYS, SCHEDULED_SKIP_ROSTER_SYNC
 
 Load index: after load_index.py, runs upload_load_index_to_supabase.py (needs DATABASE_URL).
 VALD: vald_export + profile upload + optional ForceFrame tests + optional ForceDecks (VA package grain).
@@ -37,6 +37,20 @@ ROOT = Path(__file__).resolve().parent
 PY = sys.executable
 
 KNOWN_SOURCES = ("catapult", "gymaware", "vald", "whoop", "load_index")
+
+
+def run_roster_sync() -> int:
+    """Push committed roster workbook into roster_cohort + athlete_identity."""
+    rc = _run_step(
+        "Roster cohort sync (from workbook)",
+        [ROOT / "scripts" / "sync_roster_cohort_from_xlsx.py"],
+    )
+    if rc != 0:
+        return rc
+    return _run_step(
+        "Athlete identity sync (from workbook)",
+        [ROOT / "scripts" / "sync_athlete_identity_from_xlsx.py"],
+    )
 
 
 def _env_int(name: str, default: int) -> int:
@@ -244,6 +258,20 @@ def main() -> int:
         "steps": [],
     }
     failed: list[str] = []
+
+    skip_roster = os.getenv("SCHEDULED_SKIP_ROSTER_SYNC", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    if not skip_roster:
+        rc_roster = run_roster_sync()
+        summary["steps"].append({"name": "roster_sync", "exit_code": rc_roster})
+        if rc_roster != 0:
+            failed.append("roster_sync")
+            if not args.continue_on_error:
+                print("\n" + json.dumps({**summary, "failed": failed, "ok": False}, indent=2), flush=True)
+                return 1
 
     def record(name: str, rc: int) -> bool:
         summary["steps"].append({"name": name, "exit_code": rc})

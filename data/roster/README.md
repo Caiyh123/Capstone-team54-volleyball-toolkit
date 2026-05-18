@@ -1,12 +1,42 @@
-# Roster allowlist (committed for CI)
+# Roster workbook (committed for online ETL)
 
-This directory holds the **client roster workbook** used when `ROSTER_FILTER=1`.
+This folder holds **`roster_new.xlsx`**, the team roster coaches can edit and the pipeline uses for filtering and identity mapping.
 
-- **Canonical file in repo:** `allowlist.xlsx` (copy of the client spreadsheet; sheet **GymAware** per `integrations/roster_allowlist.py`).
-- **GitHub Actions** sets `ROSTER_ALLOWLIST_XLSX=data/roster/allowlist.xlsx` so scheduled ETL finds the file after checkout.
+## For coaches (no `.env`, no API keys)
 
-To update the roster: replace `allowlist.xlsx` with a new export from the client (keep the same filename) and commit.
+1. Get the file from the GitHub repo: **`data/roster/roster_new.xlsx`** (Download raw file, or clone the repo).
+2. Edit in Excel: names, GymAware API ID, VALD profile ID, Catapult jersey/UUID, **WHOOP user ID** when available.
+3. Return the updated file to the tech team:
+   - **Option A:** Upload to your shared OneDrive/SharePoint and tell them to pull it in, or  
+   - **Option B:** Open a GitHub pull request that only replaces `data/roster/roster_new.xlsx`, or  
+   - **Option C:** Email the `.xlsx` attachment for someone to commit.
 
-For optional columns (e.g. **Catapult Jerseys**), leave the cell **blank** when not applicable. The ETL also treats `N/A`, `NA`, `-`, etc. as empty, but blanks are clearest.
+Coaches never need `DATABASE_URL`, tokens, or Python — only this spreadsheet.
 
-Confirm with your client that storing this workbook in the repository is acceptable (it may contain names and internal IDs).
+## For ETL (GitHub Actions or local)
+
+Scheduled ETL reads the committed path automatically:
+
+| Environment | Setting |
+|-------------|---------|
+| **GitHub Actions** | `ROSTER_ALLOWLIST_XLSX=data/roster/roster_new.xlsx` (in `.github/workflows/daily_etl.yml`) |
+| **Local / server** | Same path in `.env`, or omit `ROSTER_ALLOWLIST_XLSX` to use the committed file under `data/roster/` |
+
+Each run of `python scheduled_etl.py --all` (or the Daily ETL workflow) **syncs the workbook into Supabase** first:
+
+- `public.roster_cohort` — allowlist for `ROSTER_FILTER=1` and `*_roster` views  
+- `public.athlete_identity` — Global Athlete ID (`VB-{GymAware ID}`) + vendor IDs including WHOOP  
+
+Skip roster sync only if needed: `SCHEDULED_SKIP_ROSTER_SYNC=1`.
+
+## Updating the roster in GitHub
+
+```text
+Edit data/roster/roster_new.xlsx  →  commit & push  →  next Daily ETL run applies changes
+```
+
+Confirm with your client that storing names and internal IDs in the repository is acceptable.
+
+## Legacy filename
+
+`allowlist.xlsx` was the old committed name. Use **`roster_new.xlsx`** going forward (includes WHOOP ID column). You may delete `allowlist.xlsx` after switching workflows to `roster_new.xlsx`.

@@ -1,18 +1,15 @@
 """
-Export GymAware Cloud summaries (and optionally reps) for a UTC date range.
+Export GymAware Cloud summaries, reps, athletes, and personal bests for a UTC date range.
 
-API: GET /summaries and GET /reps require paired start/end (Unix seconds UTC).
-Docs cap each request at ~1 month; this script chunks windows safely.
+API (same Account ID + token for all):
+  GET /summaries, /reps  — start/end windows (max ~1 month per request; chunked)
+  GET /bests             — start/end (max ~3 months per request; chunked at 90 days by default)
+  GET /athletes          — full roster snapshot (filtered to allowlist when enabled)
 
-Configure via .env or CLI:
-  GYMAWARE_EXPORT_START=2026-01-01
-  GYMAWARE_EXPORT_END=2026-01-31
-  GYMAWARE_INCLUDE_REPS=0   # set 1 to also write gymaware_reps_export.json
-  GYMAWARE_USE_ALLOWLIST=1  # optional: filter to workbook IDs (see integrations/gymaware/allowlist.py)
+Roster: set ROSTER_FILTER=1 or GYMAWARE_USE_ALLOWLIST=1 (see integrations/gymaware/allowlist.py).
 
 Run: python gymaware_export.py
       python gymaware_export.py --start 2026-03-01 --end 2026-03-28
-      python gymaware_export.py --allowlist
 """
 from __future__ import annotations
 
@@ -35,10 +32,13 @@ from integrations.gymaware.allowlist import (
 )
 from integrations.gymaware.client import GymAwareClient
 
-# Stay under GymAware "max 1 month per request" guidance
 CHUNK_DAYS = 28
+# GymAware /bests allows ~3 months per request; default chunk is 90 days (override via env).
+BESTS_CHUNK_DAYS = int(os.getenv("GYMAWARE_BESTS_CHUNK_DAYS", "90"))
 SUMMARIES_OUT = "gymaware_summaries_export.json"
 REPS_OUT = "gymaware_reps_export.json"
+ATHLETES_OUT = "gymaware_athletes_export.json"
+BESTS_OUT = "gymaware_bests_export.json"
 
 
 def _parse_ymd(s: str) -> datetime:
@@ -46,7 +46,6 @@ def _parse_ymd(s: str) -> datetime:
 
 
 def range_to_unix_pair(start_s: str, end_s: str) -> tuple[float, float]:
-    """Inclusive calendar dates in UTC -> [start_midnight, end_next_midnight) in unix seconds."""
     start_dt = _parse_ymd(start_s)
     end_dt = _parse_ymd(end_s)
     if end_dt < start_dt:
@@ -79,11 +78,29 @@ def dedupe_by_reference(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+def dedupe_bests(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[tuple[Any, ...]] = set()
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        key = (
+            row.get("athleteReference"),
+            row.get("exerciseName"),
+            row.get("barWeight"),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(row)
+    return out
+
+
 def export_resource(
     label: str,
     fetcher: Any,
     windows: list[tuple[float, float]],
     pause_s: float,
+    *,
+    dedupe_fn: Any = dedupe_by_reference,
 ) -> list[dict[str, Any]]:
     all_rows: list[dict[str, Any]] = []
     for i, (s, e) in enumerate(windows):
@@ -97,7 +114,24 @@ def export_resource(
             all_rows.extend(chunk)
         if i < len(windows) - 1 and pause_s > 0:
             time.sleep(pause_s)
-    return dedupe_by_reference(all_rows)
+    return dedupe_fn(all_rows)
+
+
+def filter_athletes(rows: list[dict[str, Any]], allow_refs: set[int]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        ar = row.get("athleteReference")
+        try:
+            ar_int = int(ar) if ar is not None else None
+        except (TypeError, ValueError):
+            continue
+        if ar_int is not None and ar_int in allow_refs:
+            out.append(row)
+    return out
+
+
+def filter_bests(rows: list[dict[str, Any]], allow_refs: set[int]) -> list[dict[str, Any]]:
+    return filter_rows_by_athlete_reference(rows, allow_refs)
 
 
 def default_date_range() -> tuple[str, str]:
@@ -106,32 +140,37 @@ def default_date_range() -> tuple[str, str]:
     return start.isoformat(), end.isoformat()
 
 
+def _write_json(path: str, rows: list[dict[str, Any]]) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(rows, f, indent=2)
+    print(f"[SUCCESS] Wrote {len(rows)} row(s) to {path}")
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Export GymAware summaries/reps to JSON.")
-    parser.add_argument("--start", help="Start date UTC YYYY-MM-DD (default: env or last 7 days)")
-    parser.add_argument("--end", help="End date UTC YYYY-MM-DD inclusive (default: today UTC)")
+    parser = argparse.ArgumentParser(
+        description="Export GymAware summaries, reps, athletes, and bests to JSON."
+    )
+    parser.add_argument("--start", help="Start date UTC YYYY-MM-DD")
+    parser.add_argument("--end", help="End date UTC YYYY-MM-DD inclusive")
     parser.add_argument(
-        "--include-reps",
+        "--skip-reps",
         action="store_true",
-        help="Also export /reps to gymaware_reps_export.json",
+        help="Skip GET /reps export",
     )
     parser.add_argument(
-        "--pause",
-        type=float,
-        default=1.0,
-        help="Seconds between chunk requests (default: 1)",
+        "--skip-bests",
+        action="store_true",
+        help="Skip GET /bests export",
     )
+    parser.add_argument(
+        "--skip-athletes",
+        action="store_true",
+        help="Skip GET /athletes export",
+    )
+    parser.add_argument("--pause", type=float, default=1.0, help="Seconds between chunks")
     al = parser.add_mutually_exclusive_group()
-    al.add_argument(
-        "--allowlist",
-        action="store_true",
-        help="Filter rows to athlete IDs in the allowlist workbook (see GYMAWARE_ALLOWLIST_XLSX)",
-    )
-    al.add_argument(
-        "--no-allowlist",
-        action="store_true",
-        help="Do not filter by allowlist (overrides GYMAWARE_USE_ALLOWLIST in .env)",
-    )
+    al.add_argument("--allowlist", action="store_true", help="Filter to roster workbook IDs")
+    al.add_argument("--no-allowlist", action="store_true", help="Disable roster filter")
     args = parser.parse_args()
 
     start_s = args.start or os.getenv("GYMAWARE_EXPORT_START", "").strip()
@@ -139,12 +178,6 @@ def main() -> int:
     if not start_s or not end_s:
         start_s, end_s = default_date_range()
         print(f"[INFO] No date range set; using default UTC window {start_s} .. {end_s}")
-
-    include_reps = args.include_reps or os.getenv("GYMAWARE_INCLUDE_REPS", "").strip() in (
-        "1",
-        "true",
-        "yes",
-    )
 
     if args.no_allowlist:
         use_allowlist = False
@@ -159,9 +192,9 @@ def main() -> int:
         print(f"[ERROR] {e}")
         return 1
 
-    chunk_seconds = CHUNK_DAYS * 86400
-    windows = iter_chunks(start_ts, end_ts, chunk_seconds)
-    if not windows:
+    summary_windows = iter_chunks(start_ts, end_ts, CHUNK_DAYS * 86400)
+    bests_windows = iter_chunks(start_ts, end_ts, BESTS_CHUNK_DAYS * 86400)
+    if not summary_windows:
         print("[ERROR] Empty date range.")
         return 1
 
@@ -171,55 +204,62 @@ def main() -> int:
         print(f"[ERROR] {e}")
         return 1
 
-    print(f"[INFO] GymAware export UTC range (inclusive dates): {start_s} .. {end_s}")
-    print(f"[INFO] {len(windows)} API chunk(s) (max ~{CHUNK_DAYS} days each)\n")
-
     allow_refs: set[int] | None = None
     if use_allowlist:
         try:
             _, allow_refs = load_athlete_references_from_xlsx()
         except FileNotFoundError as e:
-            print(f"[ERROR] Allowlist enabled but workbook missing: {e}")
+            print(f"[ERROR] Roster filter enabled but workbook missing: {e}")
             return 1
         if not allow_refs:
-            print("[ERROR] Allowlist enabled but workbook contains no athlete IDs.")
+            print("[ERROR] Roster filter enabled but workbook contains no GymAware IDs.")
             return 1
+        print(f"[INFO] ROSTER_FILTER: GymAware export limited to {len(allow_refs)} athlete reference(s).")
+
+    print(f"[INFO] GymAware export UTC range (inclusive dates): {start_s} .. {end_s}\n")
 
     summaries = export_resource(
         "summaries",
         client.list_summaries,
-        windows,
+        summary_windows,
         args.pause,
     )
     if use_allowlist and allow_refs is not None:
         before = len(summaries)
         summaries = filter_rows_by_athlete_reference(summaries, allow_refs)
-        print(
-            f"[INFO] Allowlist filter: {len(summaries)} summary row(s) kept "
-            f"(from {before} before filter)"
-        )
+        print(f"[INFO] summaries allowlist: {len(summaries)} / {before} row(s)")
+    _write_json(SUMMARIES_OUT, summaries)
 
-    with open(SUMMARIES_OUT, "w", encoding="utf-8") as f:
-        json.dump(summaries, f, indent=2)
-    print(f"\n[SUCCESS] Wrote {len(summaries)} summary row(s) to {SUMMARIES_OUT}")
+    if not args.skip_reps:
+        reps = export_resource("reps", client.list_reps, summary_windows, args.pause)
+        if use_allowlist and allow_refs is not None:
+            before = len(reps)
+            reps = filter_rows_by_athlete_reference(reps, allow_refs)
+            print(f"[INFO] reps allowlist: {len(reps)} / {before} row(s)")
+        _write_json(REPS_OUT, reps)
 
-    if include_reps:
-        reps = export_resource(
-            "reps",
-            client.list_reps,
-            windows,
+    if not args.skip_athletes:
+        print("[INFO] Fetching athletes (full list)...")
+        athletes = client.list_athletes()
+        if use_allowlist and allow_refs is not None:
+            before = len(athletes)
+            athletes = filter_athletes(athletes, allow_refs)
+            print(f"[INFO] athletes allowlist: {len(athletes)} / {before} row(s)")
+        _write_json(ATHLETES_OUT, athletes)
+
+    if not args.skip_bests:
+        bests = export_resource(
+            "bests",
+            client.list_bests,
+            bests_windows,
             args.pause,
+            dedupe_fn=dedupe_bests,
         )
         if use_allowlist and allow_refs is not None:
-            before_r = len(reps)
-            reps = filter_rows_by_athlete_reference(reps, allow_refs)
-            print(
-                f"[INFO] Allowlist filter: {len(reps)} rep row(s) kept "
-                f"(from {before_r} before filter)"
-            )
-        with open(REPS_OUT, "w", encoding="utf-8") as f:
-            json.dump(reps, f, indent=2)
-        print(f"[SUCCESS] Wrote {len(reps)} rep row(s) to {REPS_OUT}")
+            before = len(bests)
+            bests = filter_bests(bests, allow_refs)
+            print(f"[INFO] bests allowlist: {len(bests)} / {before} row(s)")
+        _write_json(BESTS_OUT, bests)
 
     return 0
 

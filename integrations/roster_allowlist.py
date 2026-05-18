@@ -16,7 +16,8 @@ from typing import Any
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-DEFAULT_ROSTER_XLSX = "Updated Athelete Reference IDs.xlsx"
+DEFAULT_ROSTER_XLSX = "roster_new.xlsx"
+LEGACY_ROSTER_XLSX = "Updated Athelete Reference IDs.xlsx"
 
 
 def _project_root() -> Path:
@@ -32,14 +33,19 @@ def roster_allowlist_path() -> Path:
     p = os.getenv("ROSTER_ALLOWLIST_XLSX", "").strip()
     if p:
         return Path(p)
-    # Default: toolkit root, then repo parent (e.g. workbook in Volley/, scripts run from toolkit/)
-    here = _project_root() / DEFAULT_ROSTER_XLSX
-    if here.is_file():
-        return here
-    parent = _project_root().parent / DEFAULT_ROSTER_XLSX
-    if parent.is_file():
-        return parent
-    return here
+    # Committed copy for CI / clone-and-run (see data/roster/README.md)
+    committed = _project_root() / "data" / "roster" / DEFAULT_ROSTER_XLSX
+    if committed.is_file():
+        return committed
+    # Toolkit root, repo parent, then legacy workbook name
+    for name in (DEFAULT_ROSTER_XLSX, LEGACY_ROSTER_XLSX):
+        here = _project_root() / name
+        if here.is_file():
+            return here
+        parent = _project_root().parent / name
+        if parent.is_file():
+            return parent
+    return committed
 
 
 def _norm_cell(x: Any) -> str:
@@ -79,6 +85,18 @@ def _find_col(header: list[str], *needles: str) -> int | None:
         if all(n in h for n in needles):
             return i
     return None
+
+
+def _parse_whoop_user_id(v: Any) -> str | None:
+    if v is None or (isinstance(v, float) and str(v) == "nan"):
+        return None
+    s = _empty_if_placeholder(v)
+    if not s:
+        return None
+    if s.isdigit():
+        return s
+    m = re.search(r"\d{4,}", s)
+    return m.group(0) if m else None
 
 
 def _parse_uuid_cell(v: Any) -> str | None:
@@ -156,6 +174,10 @@ def load_roster_allowlist(path: str | Path | None = None) -> tuple[list[dict[str
             i_vald = _find_col(header, "vald", "profile")
             i_cat_uuid = _find_col(header, "catapult", "athlete")
             i_cat_jersey = _find_col(header, "catapult", "jersey")
+            i_whoop = _find_col(header, "whoop")
+            i_global = _find_col(header, "global", "athlete")
+            if i_global is None:
+                i_global = _find_col(header, "internal", "key")
             if i_ln is None or i_fn is None or i_ga is None:
                 continue
             last = row[i_ln] if i_ln < len(row) else None
@@ -164,6 +186,8 @@ def load_roster_allowlist(path: str | Path | None = None) -> tuple[list[dict[str
             vald_cell = row[i_vald] if i_vald is not None and i_vald < len(row) else None
             cat_cell = row[i_cat_uuid] if i_cat_uuid is not None and i_cat_uuid < len(row) else None
             jersey_cell = row[i_cat_jersey] if i_cat_jersey is not None and i_cat_jersey < len(row) else None
+            whoop_cell = row[i_whoop] if i_whoop is not None and i_whoop < len(row) else None
+            global_cell = row[i_global] if i_global is not None and i_global < len(row) else None
         else:
             if len(row) < 4:
                 continue
@@ -173,6 +197,8 @@ def load_roster_allowlist(path: str | Path | None = None) -> tuple[list[dict[str
             vald_cell = None
             cat_cell = None
             jersey_cell = None
+            whoop_cell = None
+            global_cell = None
 
         if ref is None or str(ref).strip() == "":
             continue
@@ -217,6 +243,15 @@ def load_roster_allowlist(path: str | Path | None = None) -> tuple[list[dict[str
             if js:
                 jerseys.add(js)
                 rows_out[-1]["catapult_jersey"] = js
+
+        wu = _parse_whoop_user_id(whoop_cell)
+        if wu:
+            rows_out[-1]["whoop_user_id"] = wu
+
+        if global_cell is not None:
+            gk = _empty_if_placeholder(global_cell)
+            if gk:
+                rows_out[-1]["internal_key"] = gk
 
     allow = RosterAllowlist(
         frozenset(grefs),

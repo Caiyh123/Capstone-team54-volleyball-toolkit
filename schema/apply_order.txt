@@ -3,8 +3,10 @@ Suggested order for Supabase SQL Editor (adjust if tables already exist).
 1. catapult_session_metrics.sql
 2. catapult_stats_staging.sql
    (optional) catapult_stats_staging_flat_view.sql — flattened JSON for SQL/BI
+   (optional) catapult_stats_bi_extract.sql — physical BI extract table (populate via SQL in file footer; needs ingest_id)
    (optional) catapult_load_index.sql — Load Index runs + per-activity breakdown (load_index.py + upload)
 3. gymaware_summaries.sql
+   (optional) gymaware_extended.sql — /reps, /athletes, /bests staging + BI extract tables
 4. vald_profiles.sql
    (optional) vald_forceframe_tests_staging.sql — ForceFrame GET /tests/v2 (activity metrics)
    (optional) vald_forcedecks_tests_staging.sql, vald_forcedecks_trials_staging.sql,
@@ -17,7 +19,10 @@ Suggested order for Supabase SQL Editor (adjust if tables already exist).
 9. roster_filtered_views.sql (cohort-scoped views for BI; run after roster_cohort is populated or empty)
    (optional) catapult_roster_from_stats_view.sql — latest roster fields per athlete (cohort-only; depends on catapult_stats_staging_roster)
 10. medallion_raw_layer_migration.sql — append-only raw layer (etl_ingested_at, surrogate PKs); required before updated Python ETL
-11. intermediate_big_table_view.sql — Power BI intermediate wide view (after medallion migration; uses catapult_stats_staging directly)
+   (optional) whoop_bi_extract.sql — WHOOP flat BI tables + triggers on whoop_*_staging (requires ingest_id from step 10)
+11. (deprecated) intermediate_big_table_view.sql — removed by cleanup_legacy_dashboard.sql; use *_bi_extract + athlete_identity for Power BI
+
+12. cleanup_legacy_dashboard.sql — one-time: drop dashboard_design, raw_datas, athlete_info, vw_dashboard_*, intermediate_big_table
 
 Notes:
 - whoop_staging depends on nothing except Postgres; run after whoop_oauth_tokens if you want related objects grouped.
