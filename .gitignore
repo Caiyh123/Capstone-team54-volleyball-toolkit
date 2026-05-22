@@ -218,6 +218,9 @@ __marimo__/
 # Frontend / Node files
 node_modules/
 
+# Personal viva prep (local only — not shared in repo)
+docs/operations/VIVA_PREP.md
+
 # Volleyball ETL — local exports and logs (do not commit)
 vald_snapshot.json
 catapult_bulk_export.json
