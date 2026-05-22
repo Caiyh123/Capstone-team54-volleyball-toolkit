@@ -90,6 +90,30 @@ python scripts/sync_athlete_identity_from_xlsx.py
 
 When `GYMAWARE_USE_ALLOWLIST=1` (or `python gymaware_export.py --allowlist`), only rows whose `athleteReference` appears in the workbook are written to JSON and (for upload) sent to Postgres. Use `--no-allowlist` for a full export regardless of `.env`.
 
+## GymAware Silver (dedupe + athlete names)
+
+Apply **`schema/silver_gymaware.sql`**. Use `silver_gymaware_summaries`, `silver_gymaware_rep`, `silver_gymaware_bests`, `silver_gymaware_athletes` in Power BI (not raw `gymaware_*_bi_extract`). Slicer: **`athlete_display_name`**.
+
+## WHOOP Silver (dedupe + athlete names)
+
+Apply **`schema/silver_whoop.sql`**. Bronze `whoop_*_bi_extract` rows duplicate on every ETL run; silver views keep one row per natural key and add **`athlete_internal_key`**, **`athlete_display_name`**, **`calendar_date`** from `athlete_identity` (sync roster + WHOOP user IDs).
+
+| View | Use for |
+|------|---------|
+| `silver_whoop_recovery` | Summary HRV, RHR, recovery % |
+| `silver_whoop_sleep` | Sleep detail (each sleep / nap) |
+| `silver_whoop_workout` | Workout detail |
+| `silver_whoop_cycle` | Cycle strain / day window |
+| `silver_whoop_sleep_longest_per_day` | Optional “main sleep” KPI per day |
+
+Cross-source filtering: [cross_source_correlation.md](../volley-etl/cross_source_correlation.md).
+
+## Catapult Bronze / Silver (Gold deferred)
+
+- **Bronze:** `catapult_stats_staging`, `catapult_stats_bi_extract` (append-only; duplicate ingests possible).
+- **Silver:** `silver_catapult_session` — one row per player per session; apply `schema/silver_catapult_session.sql`. Use for all Catapult reporting.
+- **Gold:** not implemented. Client reviews **independent sessions**, not daily rolled-up totals. Optional later if summary dashboards need one row per athlete per day or easier WHOOP + Catapult daily joins. See [catapult_medallion_layers.md](../volley-etl/catapult_medallion_layers.md).
+
 ## GymAware `/bests` date chunks
 
 `gymaware_export.py` splits long backfills for `GET /bests` into windows of **90 days** (under the API’s ~3-month limit per request). Summaries and reps still use **28-day** chunks. To use a different window (e.g. if GymAware changes limits or you want smaller requests), set **`GYMAWARE_BESTS_CHUNK_DAYS`** in `.env` before export.

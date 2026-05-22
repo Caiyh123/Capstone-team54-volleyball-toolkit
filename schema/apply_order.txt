@@ -3,10 +3,14 @@ Suggested order for Supabase SQL Editor (adjust if tables already exist).
 1. catapult_session_metrics.sql
 2. catapult_stats_staging.sql
    (optional) catapult_stats_staging_flat_view.sql — flattened JSON for SQL/BI
-   (optional) catapult_stats_bi_extract.sql — physical BI extract table (populate via SQL in file footer; needs ingest_id)
+   (optional) catapult_stats_bi_extract.sql — physical BI extract table (populate via upload_to_supabase.py; needs ingest_id)
+   (optional) silver_catapult_session.sql — one row per player per session (deduped; use for Catapult Power BI)
+   (deferred) gold_catapult_athlete_day — daily rollup only if summary dashboard needs one row per athlete per day;
+              see docs/volley-etl/catapult_medallion_layers.md
    (optional) catapult_load_index.sql — Load Index runs + per-activity breakdown (load_index.py + upload)
 3. gymaware_summaries.sql
    (optional) gymaware_extended.sql — /reps, /athletes, /bests staging + BI extract tables
+   (optional) silver_gymaware.sql — GymAware silver views + athlete_internal_key / athlete_display_name
 4. vald_profiles.sql
    (optional) vald_forceframe_tests_staging.sql — ForceFrame GET /tests/v2 (activity metrics)
    (optional) vald_forcedecks_tests_staging.sql, vald_forcedecks_trials_staging.sql,
@@ -20,6 +24,7 @@ Suggested order for Supabase SQL Editor (adjust if tables already exist).
    (optional) catapult_roster_from_stats_view.sql — latest roster fields per athlete (cohort-only; depends on catapult_stats_staging_roster)
 10. medallion_raw_layer_migration.sql — append-only raw layer (etl_ingested_at, surrogate PKs); required before updated Python ETL
    (optional) whoop_bi_extract.sql — WHOOP flat BI tables + triggers on whoop_*_staging (requires ingest_id from step 10)
+   (optional) silver_whoop.sql — WHOOP silver: cycle, sleep, workout, recovery, sleep_longest_per_day (+ athlete names)
 11. (deprecated) intermediate_big_table_view.sql — removed by cleanup_legacy_dashboard.sql; use *_bi_extract + athlete_identity for Power BI
 
 12. cleanup_legacy_dashboard.sql — one-time: drop dashboard_design, raw_datas, athlete_info, vw_dashboard_*, intermediate_big_table

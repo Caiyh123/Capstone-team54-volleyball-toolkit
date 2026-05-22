@@ -95,9 +95,20 @@ This document lists **Supabase tables and columns** that the Python ETL in this 
 | `updated_at` | TIMESTAMPTZ | `upload_gymaware_to_supabase.py` (`NOW()`) | |
 | `etl_ingested_at` | TIMESTAMPTZ | `upload_gymaware_to_supabase.py` (`NOW()`) | Append-only audit |
 
-### `public.gymaware_summaries_bi_extract`, `gymaware_rep_bi_extract`, `gymaware_athletes_bi_extract`, `gymaware_bests_bi_extract`
+### GymAware silver (`schema/silver_gymaware.sql`)
 
-Flat BI columns from `/summaries`, `/reps` (one row per rep), `/athletes`, `/bests`. Populated by `upload_gymaware_to_supabase.py` after `schema/gymaware_extended.sql`. Roster filter when `ROSTER_FILTER=1`. `/bests` export uses 90-day API windows by default (`GYMAWARE_BESTS_CHUNK_DAYS` — alter in `.env` as needed).
+| View | Notes |
+|------|--------|
+| `silver_gymaware_summaries` | Sets; includes `athlete_internal_key`, `athlete_display_name`, `calendar_date` |
+| `silver_gymaware_rep` | Per rep |
+| `silver_gymaware_bests` | Personal bests |
+| `silver_gymaware_athletes` | Profiles |
+
+Bronze: `gymaware_*_bi_extract` — audit only; use silver views in Power BI.
+
+### `public.gymaware_summaries_bi_extract`, … (bronze)
+
+Flat BI columns from `/summaries`, `/reps`, `/athletes`, `/bests`. Populated by `upload_gymaware_to_supabase.py`. Roster filter when `ROSTER_FILTER=1`.
 
 ### `public.gymaware_reps_staging`, `gymaware_athletes_staging`, `gymaware_bests_staging`
 
@@ -213,6 +224,17 @@ Populated from the client roster workbook: `python scripts/sync_athlete_identity
 | View | Purpose |
 |------|---------|
 | `public.catapult_stats_staging_flat` | Scalar fields from Catapult JSONB + `ingest_id` / `etl_ingested_at` |
+| `public.silver_catapult_session` | Deduped Catapult session grain (activity + athlete); includes `athlete_internal_key`, `athlete_display_name`. **Use for Catapult Power BI** instead of raw `catapult_stats_bi_extract`. Gold daily rollup deferred — see [catapult_medallion_layers.md](volley-etl/catapult_medallion_layers.md). |
+
+### WHOOP silver (`schema/silver_whoop.sql`)
+
+| View | Grain | Notes |
+|------|--------|--------|
+| `silver_whoop_recovery` | user + cycle | Summary HRV/RHR |
+| `silver_whoop_sleep` | sleep_id | All sleeps; includes names |
+| `silver_whoop_workout` | workout_id | All workouts |
+| `silver_whoop_cycle` | user + cycle | Strain window |
+| `silver_whoop_sleep_longest_per_day` | user + calendar_date | Longest in-bed sleep that day |
 | `public.*_bi_extract` | Flat vendor facts for Power BI (join via `athlete_identity` / `roster_cohort`) |
 | `public.*_roster` | Cohort-scoped vendor views (`schema/roster_filtered_views.sql`) |
 

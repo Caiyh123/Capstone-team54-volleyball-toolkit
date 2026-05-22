@@ -1,6 +1,6 @@
 # Capstone Team 54 — Volleyball Data Analysis Toolkit
 
-Headless ETL pipeline: **Catapult** and **GymAware** → **Supabase (Postgres)** for analytics (e.g. Power BI). Optional sources (WHOOP, VALD, Teamworks) are documented under `docs/volley-etl/`.
+Headless ETL pipeline: **Catapult**, **GymAware**, **WHOOP**, and **VALD** → **Supabase (Postgres)** with **silver** read models for a custom analytics website (Power BI optional). See `docs/volley-etl/`.
 
 ## Quick start
 
@@ -41,7 +41,7 @@ Headless ETL pipeline: **Catapult** and **GymAware** → **Supabase (Postgres)**
 
 ## Main Python entrypoints
 
-- Catapult: `bulk_export.py` → `upload_to_supabase.py` (full stats JSONB in `catapult_stats_staging` + narrow `catapult_session_metrics`; apply `schema/catapult_stats_staging.sql`). Each successful staging insert also appends **`public.catapult_stats_bi_extract`** when `schema/catapult_stats_bi_extract.sql` is applied. For production roster scope set **`ROSTER_FILTER=1`** in `.env` so export and upload only include athletes in the workbook (otherwise all sessions’ athletes can be ingested). SQL cohort views: `schema/roster_filtered_views.sql` (`catapult_stats_staging_roster`), then optional `catapult_stats_staging_flat_view.sql`, `catapult_roster_from_stats_view.sql`. Export cap: `CATAPULT_BULK_EXPORT_LIMIT` or `bulk_export.py --all`.
+- Catapult: `bulk_export.py` → `upload_to_supabase.py` → report from **`silver_catapult_session`** ([Bronze/Silver/Gold notes](docs/volley-etl/catapult_medallion_layers.md)) (full stats JSONB in `catapult_stats_staging` + narrow `catapult_session_metrics`; apply `schema/catapult_stats_staging.sql`). Each successful staging insert also appends **`public.catapult_stats_bi_extract`** when `schema/catapult_stats_bi_extract.sql` is applied. For production roster scope set **`ROSTER_FILTER=1`** in `.env` so export and upload only include athletes in the workbook (otherwise all sessions’ athletes can be ingested). SQL cohort views: `schema/roster_filtered_views.sql` (`catapult_stats_staging_roster`), then optional `catapult_stats_staging_flat_view.sql`, `catapult_roster_from_stats_view.sql`. Export cap: `CATAPULT_BULK_EXPORT_LIMIT` or `bulk_export.py --all`.
 - Load index: `load_index.py` → `upload_load_index_to_supabase.py` (apply `schema/catapult_load_index.sql`; JSON then DB run + per-activity rows)
 - GymAware: `gymaware_export.py` → `upload_gymaware_to_supabase.py` (`/summaries`, `/reps`, `/athletes`, `/bests`; apply `schema/gymaware_extended.sql` for BI tables; roster filter when `ROSTER_FILTER=1`). `/bests` backfills are chunked at **90 days** by default (`GYMAWARE_BESTS_CHUNK_DAYS` in `.env` if you need a different window).
 - Integration smoke test: `verify_integrations.py`
@@ -58,6 +58,8 @@ GymAware **allowlist** (workbook-driven athlete IDs): set `GYMAWARE_USE_ALLOWLIS
 ## Documentation
 
 - **[Team handover: what works / what’s next](docs/operations/project_status_handover.md)**
+- **[Product review checklist (rubric)](docs/operations/product_review_checklist.md)**
+- **[System design](docs/design/system_design.md)** · **[Web app data contract](docs/operations/web_app_handover.md)**
 - [Requirements summary](docs/requirements/requirements-summary.md)
 - [Open questions](docs/requirements/open-questions.md)
 - [Runbook](docs/operations/runbook.md)

@@ -53,7 +53,8 @@ In Supabase SQL Editor, run scripts in the order described in `schema/apply_orde
 
 - `schema/medallion_raw_layer_migration.sql` (append-only raw layer: `etl_ingested_at`, surrogate keys)
 - Optional VALD activity tables (if using those upload scripts): `vald_forceframe_tests_staging.sql`, `vald_forcedecks_tests_staging.sql`, `vald_forcedecks_trials_staging.sql`, `vald_forcedecks_result_definitions_staging.sql`
-- `schema/intermediate_big_table_view.sql` (Power BI intermediate view)
+- `schema/silver_catapult_session.sql`, `schema/silver_whoop.sql`, `schema/silver_gymaware.sql` (reporting views — after BI extract DDL)
+- `schema/cleanup_legacy_dashboard.sql` (one-time, if old dashboard objects still exist)
 
 ## 4. Daily run (all sources)
 
@@ -83,4 +84,4 @@ See `.github/workflows/daily_etl.yml`. Configure **repository secrets** matching
 - **GitHub Actions green but no new data:** Read the job log JSON summary (`failed` / `steps`); empty optional secrets (e.g. `CATAPULT_BASE_URL`) can break API URLs.
 - **WHOOP empty:** Athletes must complete OAuth; check `whoop_oauth_token` and `whoop_etl_run.summary`.
 - **VALD profiles only, no activity:** Profiles API is identity only; enable ForceFrame and/or ForceDecks staging DDL + upload scripts. ForceDecks trials need `VALD_FORCEDECKS_TEAM_ID` where applicable. See `docs/volley-etl/vald_volleyball_au_package.md`.
-- **Duplicate raw rows:** Expected in append-only mode; dedupe in BI or a downstream view.
+- **Duplicate raw rows:** Expected in append-only mode; use **`silver_*`** views for dashboards and the website (see `docs/volley-etl/cross_source_correlation.md`).

@@ -1,6 +1,6 @@
 # Project status handover (Volleyball toolkit)
 
-Snapshot for the team: what is working in the repo, how to run it, and what remains. Repository: **Capstone-team54-volleyball-toolkit**.
+Snapshot for the team and client: what is working, how to run it, silver read models for the website, and what remains. Repository: **Capstone-team54-volleyball-toolkit**.
 
 ---
 
@@ -8,69 +8,84 @@ Snapshot for the team: what is working in the repo, how to run it, and what rema
 
 ### Infrastructure
 
-- **Supabase (Postgres):** Schema files under `schema/` — apply order in `schema/apply_order.txt`.
-- **Environment:** Copy `.env.example` to `.env` (never commit `.env`). Offline check: `python scripts/preflight_config.py` (prints yes/no only).
-- **CI:** GitHub Actions runs `python -m compileall` on push/PR (`.github/workflows/ci.yml`).
+- **Supabase (Postgres):** Schema under `schema/` — apply order in `schema/apply_order.txt`.
+- **Medallion raw layer:** Append-only staging/BI with `etl_ingested_at` / `ingest_id` (`schema/medallion_raw_layer_migration.sql`).
+- **Environment:** Copy `.env.example` to `.env` (never commit `.env`). Offline check: `python scripts/preflight_config.py`.
+- **CI:** `.github/workflows/ci.yml` (compile check); `.github/workflows/daily_etl.yml` (nightly multi-source ETL + roster sync).
+
+### Roster and athlete identity (automated)
+
+- **Coach workbook:** `data/roster/roster_new.xlsx` (committed for GitHub Actions). Instructions: `data/roster/README.md`, `data/roster/ROSTER_FOR_COACHES.md`.
+- **Sync scripts:** `scripts/sync_athlete_identity_from_xlsx.py`, `scripts/sync_roster_cohort_from_xlsx.py`.
+- **`scheduled_etl.py`:** Runs roster sync before vendor ETL unless `SCHEDULED_SKIP_ROSTER_SYNC=1`.
+- **`public.athlete_identity`:** Crosswalk (`internal_key`, Catapult/GymAware/VALD/WHOOP IDs, display names). Populated from workbook sync.
 
 ### Catapult
 
-- **Export:** `bulk_export.py` — activities and stats → `catapult_bulk_export.json`. Client cap: `CATAPULT_BULK_EXPORT_LIMIT` (default 100) or `python bulk_export.py --all` for the full list returned by `GET /activities` (API may still page/limit server-side).
-- **Load:** `upload_to_supabase.py` — **upserts** full `POST /stats` rows into `public.catapult_stats_staging` (`stats_payload` JSONB); still **inserts** narrow metrics into `public.catapult_session_metrics` (legacy). Apply `schema/catapult_stats_staging.sql` in Supabase.
-- **Views (optional SQL):** `schema/catapult_stats_staging_flat_view.sql` — flattened JSON scalars for BI; `schema/catapult_roster_from_stats_view.sql` — latest `team_name` / `position_name` / `athlete_jersey` per athlete key (see file comments when `athlete_id` is null). Order: `schema/apply_order.txt`.
-- **Load index (metric):** `load_index.py` → `load_index_result.json`; **`upload_load_index_to_supabase.py`** inserts into `public.catapult_load_index_run` and `public.catapult_load_index_activity`. Apply `schema/catapult_load_index.sql`.
+- **Export/load:** `bulk_export.py` → `upload_to_supabase.py` → `catapult_stats_staging` + `catapult_stats_bi_extract`.
+- **Silver (reporting):** `schema/silver_catapult_session.sql` → `silver_catapult_session` — one row per player per session (deduped ingests; periods aggregated). **Gold daily rollup deferred** per client (session-level reporting). See `docs/volley-etl/catapult_medallion_layers.md`.
+- **Load index:** `load_index.py` → `upload_load_index_to_supabase.py`.
 
-### GymAware
+### GymAware (extended)
 
-- **Export:** `gymaware_export.py` — date-range summaries (optional reps) → JSON.
-- **Load:** `upload_gymaware_to_supabase.py` — upserts into `public.gymaware_summaries`.
-- **Allowlist:** Optional workbook filter for privacy (`integrations/gymaware/allowlist.py`, env + flags).
+- **Export:** `gymaware_export.py` — `/summaries`, `/reps`, `/athletes`, `/bests` (bests chunked; `GYMAWARE_BESTS_CHUNK_DAYS`, default 90).
+- **Load:** `upload_gymaware_to_supabase.py` → staging + BI extract tables (`schema/gymaware_extended.sql`).
+- **Silver:** `schema/silver_gymaware.sql` — summaries, reps, bests, athletes with `athlete_internal_key` / `athlete_display_name`.
+
+### WHOOP
+
+- **Auth bridge:** `backend/app.py` — OAuth start/callback; tokens in `whoop_oauth_token`.
+- **ETL:** `whoop_etl.py` → staging + `whoop_*_bi_extract` (with `whoop_bi_extract.sql`).
+- **Silver:** `schema/silver_whoop.sql` — cycle, sleep, workout, recovery, `silver_whoop_sleep_longest_per_day`.
 
 ### VALD
 
-- **Client:** `integrations/vald/client.py` — OAuth client credentials; tenants/profiles; ForceFrame test summaries; ForceDecks tests, detailed tests/trials (team-scoped), result definitions.
-- **Load:** `upload_vald_profiles_to_supabase.py` → `public.vald_profiles`. Optional append-only activity: `upload_vald_forceframe_tests_to_supabase.py`, `upload_vald_forcedecks_to_supabase.py` (see `schema/vald_forceframe_tests_staging.sql`, `schema/vald_forcedecks_*.sql`).
-- **Smoke/export:** `vald_export.py`.
-- **Docs:** `docs/volley-etl/vald_volleyball_au_package.md`, `vald_onboarding.md`.
+- Profiles + optional ForceFrame / ForceDecks staging uploads via `scheduled_etl.py`. See `docs/volley-etl/vald_onboarding.md`.
 
-### WHOOP (direct Developer API)
+### Scheduled pipeline
 
-- **Auth bridge (FastAPI):** `backend/app.py` — `/whoop/start`, `/callback`, `/health`, `/whoop/oauth-check`. Deploy with `uvicorn` (see `render.yaml` / `docs/operations/deploy-render-whoop-bridge.md`).
-- **OAuth:** `integrations/whoop/oauth.py` — authorization code + **refresh token** (`client_secret_post`). REST base: `https://api.prod.whoop.com/developer` (not the same path as `/oauth/`).
-- **Tokens:** Stored in `public.whoop_oauth_token` when `DATABASE_URL` is set.
-- **ETL:** `whoop_etl.py` — refreshes tokens, pulls sleep / workout / cycle / recovery into staging tables (`whoop_*_staging`, audit `whoop_etl_run`). See `schema/whoop_staging.sql`.
+- **`scheduled_etl.py`:** Roster sync → Catapult → GymAware → VALD → WHOOP → load index (+ DB upload). Non-zero exit if any step failed.
+- **Windows:** `scripts/run_scheduled_sync.ps1`.
+- **GitHub Actions:** `daily_etl.yml` with `ROSTER_ALLOWLIST_XLSX=data/roster/roster_new.xlsx`, `ROSTER_FILTER=1`.
 
-### Scheduled multi-source pipeline
+### Analytics read model (website / BI)
 
-- **Orchestrator:** `scheduled_etl.py` — Catapult → GymAware → VALD (export snapshot → profiles → optional ForceFrame → optional ForceDecks) → WHOOP ETL → `load_index.py` → **`upload_load_index_to_supabase.py`** (or subsets via `--sources`). Exit code is non-zero if any step failed (even with `--continue-on-error`, which still runs all sources).
-- **Windows Task Scheduler:** `scripts/run_scheduled_sync.ps1` calls `scheduled_etl.py --all --continue-on-error`; logs under `logs/`.
-- **GitHub Actions:** `.github/workflows/daily_etl.yml` — same pattern; read job log JSON for `failed` steps.
-- **Docs:** `docs/operations/runbook.md`, README “Main Python entrypoints”, `README_HANDOVER.md`.
+- **Do not report from raw `*_bi_extract`** for dashboards — duplicate rows from append-only ingests.
+- **Use silver views** + `athlete_identity` for filters and joins. Cross-source pattern: `docs/volley-etl/cross_source_correlation.md`.
+- **Legacy dashboard tables removed:** `cleanup_legacy_dashboard.sql` (dropped `dashboard_design`, `vw_dashboard_*`, etc.).
 
-### Identity (schema only)
+### Documentation
 
-- **`public.athlete_identity`:** DDL in `schema/athlete_identity.sql` — crosswalk for roster ↔ Catapult / GymAware / VALD / WHOOP / Teamworks. **Population** is a process task (spreadsheet/import), not automated in repo.
-
----
-
-## Verified in practice (recent run)
-
-- `scheduled_etl.py --all` completed successfully: Catapult upload, GymAware upload, VALD profiles upsert, WHOOP ETL (no API error), load index JSON written and load index rows inserted when `DATABASE_URL` is set.
-- **New WHOOP accounts** may return **zero** rows until there is scored sleep/activity in the requested lookback window — expected, not a pipeline failure.
+| Document | Purpose |
+|----------|---------|
+| `docs/design/system_design.md` | Architecture, workflows, design decisions |
+| `docs/operations/web_app_handover.md` | Tables/views for frontend team |
+| `docs/operations/testing_notes.md` | Smoke tests, ETL verification, known issues |
+| `docs/operations/product_review_checklist.md` | Rubric alignment for capstone review |
+| `docs/data_dictionary_baseline.md` | Column-level reference |
+| `docs/volley-etl/cross_source_correlation.md` | Athlete + date correlation across sources |
 
 ---
 
-## Remaining / next steps for the team
+## Verified in practice
+
+- `scheduled_etl.py --all` — Catapult, GymAware, VALD profiles, WHOOP ETL, load index (when credentials set).
+- Silver views applied in dev Supabase; row counts deduped vs bronze (e.g. Catapult 146 bronze rows → 65 session rows; WHOOP recovery deduped to one row per cycle).
+- Roster-linked athletes show `athlete_display_name` on silver WHOOP/Catapult/GymAware where IDs are filled in `roster_new.xlsx`.
+
+---
+
+## Remaining / post-review (optional)
 
 | Area | Notes |
 |------|--------|
-| **Master roster → `athlete_identity`** | Import client roster; fill `internal_key`, vendor IDs (`whoop_user_id`, `vald_profile_id`, etc.). Enables personalized WHOOP links (`/whoop/start?state=...`) and BI joins. |
-| **WHOOP data volume** | Re-run `whoop_etl.py` after athletes have nights/activities; tune `--lookback-days` if needed. |
-| **RLS & security** | Tables are **UNRESTRICTED** in Supabase until RLS (or restricted roles) is applied — especially token and PII tables. |
-| **Production hosting** | Render (or other) for the Auth Bridge; ensure `WHOOP_REDIRECT_URI` matches dashboard + env. Scheduler can run on any machine/cron with `.env`. |
-| **Teamworks AMS** | Config placeholders only — no ETL script until API access and requirements are clear (`docs/volley-etl/whoop_via_teamworks.md`). |
-| **VALD ForceDecks / product metrics** | Profiles are in; ForceDecks and other products are follow-up (see `docs/volley-etl/vald_va_package_notes.md`). |
-| **BI / dashboards** | Wire Supabase to Power BI or stack of choice; use optional views (`catapult_stats_staging_flat`, `catapult_roster_from_stats`) and load index tables as needed. |
-| **Documentation polish** | Central `docs/volley-etl/current_scope.md` may predate WHOOP/VALD delivery — align narrative when convenient. |
+| **Frontend website** | `frontend/` placeholder — consumes Supabase silver + `athlete_identity` (see `web_app_handover.md`). |
+| **RLS & API layer** | Tables unrestricted until RLS or backend API with service role. |
+| **WHOOP athlete onboarding** | Only roster athletes with `whoop_user_id` + completed OAuth receive data. |
+| **Catapult rate limits (429)** | Bulk export may need backoff/tuning under heavy CI runs. |
+| **Gold Catapult daily rollup** | Not built — client wants independent sessions. |
+| **Teamworks AMS** | Placeholder only. |
+| **Power BI** | Deprioritized in favour of custom web; silver schema unchanged for either consumer. |
 
 ---
 
@@ -80,7 +95,7 @@ Snapshot for the team: what is working in the repo, how to run it, and what rema
 python scripts/preflight_config.py
 python verify_integrations.py
 python scheduled_etl.py --all
-python scheduled_etl.py --sources catapult,gymaware
+python scripts/sync_athlete_identity_from_xlsx.py
 ```
 
 ---
@@ -89,11 +104,8 @@ python scheduled_etl.py --sources catapult,gymaware
 
 | Path | Role |
 |------|------|
-| `.env.example` | Variable reference |
-| `schema/apply_order.txt` | Supabase DDL order (all `schema/*.sql` objects) |
+| `schema/silver_*.sql` | Reporting views (apply after BI extract DDL) |
+| `data/roster/roster_new.xlsx` | Coach-maintained roster |
 | `scheduled_etl.py` | Multi-source scheduler |
-| `upload_load_index_to_supabase.py` | Load index JSON → `catapult_load_index_*` |
-| `whoop_etl.py` | WHOOP-only ETL |
-| `backend/app.py` | WHOOP OAuth bridge |
-| `docs/operations/runbook.md` | Install + Task Scheduler |
-| `docs/operations/deploy-render-whoop-bridge.md` | Render deploy |
+| `docs/operations/runbook.md` | Install + scheduling |
+| `docs/operations/product_review_checklist.md` | Assessment rubric checklist |

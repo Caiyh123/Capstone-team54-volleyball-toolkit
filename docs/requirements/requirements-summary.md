@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a **headless data pipeline** that ingests vendor performance data (Catapult, GymAware; later WHOOP, VALD, Teamworks where approved), stores it in **Supabase (Postgres)**, and supports **scheduled export→upload** plus **reporting / RCA** in **Power BI** (or similar). The system is **not** a live-streaming athlete app; routine refreshes are **automated**, not manual.
+Build a **headless data pipeline** that ingests vendor performance data (Catapult, GymAware, WHOOP, VALD; Teamworks when approved), stores it in **Supabase (Postgres)**, and supports **scheduled export→upload** plus **silver read models** for a **custom analytics website** (Power BI optional). Routine refreshes are **automated**, not manual.
 
 ## In scope (current)
 
@@ -12,18 +12,19 @@ Build a **headless data pipeline** that ingests vendor performance data (Catapul
 | **GymAware Cloud** | Export summaries (optional reps); upload to Postgres; **optional allowlist** filtering via workbook for roster/privacy scope. |
 | **Verification** | `verify_integrations.py` confirms configured APIs respond. |
 | **Scheduling** | Windows: `scripts/run_scheduled_sync.ps1` + Task Scheduler (see `docs/operations/runbook.md`). |
-| **WHOOP (initial)** | FastAPI **Auth Bridge** (`backend/app.py`) + `schema/whoop_oauth_tokens.sql` + `integrations/whoop/oauth.py` — OAuth callback stores tokens; **nightly ETL** to metrics tables is a follow-up. |
-| **Identity** | Schema for **athlete crosswalk** (`schema/athlete_identity.sql`); population is a separate data task with the client. |
+| **WHOOP** | Auth Bridge + nightly ETL + `whoop_bi_extract` + `silver_whoop_*` views. |
+| **Identity** | `athlete_identity` + `roster_new.xlsx` sync (automated in `scheduled_etl.py`). |
+| **Silver layer** | Deduped views for Catapult sessions, WHOOP, GymAware (`schema/silver_*.sql`). |
 | **Documentation** | Runbook, `.env.example`, integration notes under `docs/volley-etl/`. |
 
 ## Out of scope / deferred
 
 | Area | Notes |
 |------|--------|
-| **WHOOP** | OAuth + refresh handling + ETL — planned; needs app registration and per-athlete consent flow. |
-| **VALD** | Pending client API approval and regional credentials. |
 | **Teamworks AMS** | Optional path; depends on tenant API access. |
-| **Frontend** | Existing dashboard may be used for identity/OAuth only; core analytics are BI + DB. |
+| **Frontend website** | In progress; consumes silver views per `docs/operations/web_app_handover.md`. |
+| **RLS / production API** | Documented; implementation deferred. |
+| **Catapult Gold (daily rollup)** | Deferred — client wants session-level reporting. |
 
 ## Non-functional
 
