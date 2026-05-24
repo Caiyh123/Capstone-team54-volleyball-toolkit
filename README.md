@@ -59,7 +59,7 @@ GymAware **allowlist** (workbook-driven athlete IDs): set `GYMAWARE_USE_ALLOWLIS
 
 - **[Team handover: what works / what’s next](docs/operations/project_status_handover.md)**
 - **[Product review checklist (rubric)](docs/operations/product_review_checklist.md)**
-- **[System design](docs/design/system_design.md)** · **[Web app data contract](docs/operations/web_app_handover.md)**
+- **[System design](docs/design/system_design.md)** · **[Web app data contract](docs/operations/web_app_handover.md)** · **[VPA integration](docs/operations/vpa_frontend_integration.md)**
 - [Requirements summary](docs/requirements/requirements-summary.md)
 - [Open questions](docs/requirements/open-questions.md)
 - [Runbook](docs/operations/runbook.md)

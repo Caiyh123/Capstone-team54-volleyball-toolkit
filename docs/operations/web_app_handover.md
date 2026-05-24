@@ -1,23 +1,49 @@
 # Web application handover (data contract)
 
-The custom website should read **silver views** and **`athlete_identity`** from Supabase. The ETL team does not own the React/UI layer; this document defines the database contract.
+The coaching dashboard **VPA** (FastAPI + React, separate `vpa/` repo) reads **silver views** from Supabase via PostgREST. This toolkit repo owns ETL, roster sync, and silver DDL — not the React UI.
 
-## Authentication (TBD by frontend)
+**Integration guide:** [`vpa_frontend_integration.md`](vpa_frontend_integration.md)
 
-- Option A: Supabase client with **RLS** policies per role (not yet implemented).
-- Option B: Backend API using **service role** `DATABASE_URL` (server-side only; never expose in browser).
+## Two backends (do not merge)
+
+| App | Location | Purpose |
+|-----|----------|---------|
+| WHOOP OAuth bridge | This repo: `backend/app.py` | Per-athlete OAuth; writes `whoop_oauth_token` |
+| VPA dashboard API | VPA repo: `vpa/backend/app/` | Reads silver tables with `SUPABASE_SERVICE_KEY` |
+
+## Authentication
+
+- **VPA:** Service role key in `vpa/backend/.env` only — never in the browser.
+- **Production:** RLS or API gateway still recommended; not implemented in ETL repo.
 
 ## Athlete picker (global filter)
 
-Use **`public.athlete_identity`**:
+Use **`public.athlete_identity`** or silver columns:
 
 | Column | Use |
 |--------|-----|
-| `internal_key` | Stable join key across pages |
-| `display_name` | UI label (or map from roster) |
-| `whoop_user_id`, `gymaware_athlete_reference`, etc. | Vendor-specific drill-downs |
+| `internal_key` / `athlete_internal_key` | Stable join key (e.g. `VB-5406785896`) |
+| `display_name` / `athlete_display_name` | UI label |
 
-Filter all fact queries by **`athlete_internal_key`** or **`athlete_display_name`** on silver views (both populated when roster sync has vendor IDs).
+Filter facts by **`athlete_internal_key`** + **`calendar_date`**.
+
+## Tables VPA consumes today
+
+| Table | Pages |
+|-------|--------|
+| `silver_catapult_session` | `/`, `/catapult` |
+| `silver_whoop_recovery`, `silver_whoop_sleep` | `/`, `/whoop` |
+| `silver_gymaware_summaries`, `silver_gymaware_bests` | `/gymaware` |
+| VALD (TBD) | `/vald` — likely staging until `silver_vald_*` exists |
+
+## Additional silver (available, not in VPA README yet)
+
+| View | Use |
+|------|-----|
+| `silver_whoop_workout` | Workout detail |
+| `silver_whoop_cycle` | Cycle strain / dates |
+| `silver_whoop_sleep_longest_per_day` | Main sleep per day |
+| `silver_gymaware_rep` | Rep-level detail |
 
 ## Summary page (one athlete + one date)
 
@@ -29,19 +55,6 @@ Filter all fact queries by **`athlete_internal_key`** or **`athlete_display_name
 
 Row counts **will differ** across sources on the same calendar day — expected. See `docs/volley-etl/cross_source_correlation.md`.
 
-## Detail pages
-
-| Tab | Silver view |
-|-----|-------------|
-| Catapult | `silver_catapult_session` |
-| WHOOP sleep | `silver_whoop_sleep` |
-| WHOOP workout | `silver_whoop_workout` |
-| WHOOP recovery | `silver_whoop_recovery` |
-| WHOOP cycle | `silver_whoop_cycle` |
-| GymAware summaries | `silver_gymaware_summaries` |
-| GymAware reps | `silver_gymaware_rep` |
-| GymAware bests | `silver_gymaware_bests` |
-
 ## Do not use for UI metrics
 
 - Raw `*_bi_extract` tables (duplicate ingests).
@@ -49,15 +62,15 @@ Row counts **will differ** across sources on the same calendar day — expected.
 
 ## Schema apply order
 
-If standing up a new Supabase project: `schema/apply_order.txt` (bronze → BI extract → silver).
+New Supabase project: `schema/apply_order.txt` (bronze → BI extract → silver).
 
 ## Sample filter (SQL)
 
 ```sql
 SELECT *
 FROM public.silver_whoop_recovery
-WHERE athlete_display_name = 'Jane Example'
+WHERE athlete_internal_key = 'VB-5406785896'
   AND calendar_date = '2026-05-20';
 ```
 
-Equivalent in app code: filter `athlete_internal_key` + `calendar_date` on each silver query.
+Equivalent in VPA: pass `athlete_internal_key` + date to FastAPI routers that query PostgREST.

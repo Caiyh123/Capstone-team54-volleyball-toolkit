@@ -48,18 +48,20 @@ Snapshot for the team and client: what is working, how to run it, silver read mo
 - **Windows:** `scripts/run_scheduled_sync.ps1`.
 - **GitHub Actions:** `daily_etl.yml` with `ROSTER_ALLOWLIST_XLSX=data/roster/roster_new.xlsx`, `ROSTER_FILTER=1`.
 
-### Analytics read model (website / BI)
+### Analytics read model (VPA website / BI)
 
-- **Do not report from raw `*_bi_extract`** for dashboards — duplicate rows from append-only ingests.
-- **Use silver views** + `athlete_identity` for filters and joins. Cross-source pattern: `docs/volley-etl/cross_source_correlation.md`.
-- **Legacy dashboard tables removed:** `cleanup_legacy_dashboard.sql` (dropped `dashboard_design`, `vw_dashboard_*`, etc.).
+- **VPA app (separate repo):** FastAPI + React dashboard reads silver tables via PostgREST (`SUPABASE_SERVICE_KEY`). See `docs/operations/vpa_frontend_integration.md`.
+- **Do not report from raw `*_bi_extract`** — duplicate rows from append-only ingests.
+- **Use silver views** + `athlete_identity`. Cross-source pattern: `docs/volley-etl/cross_source_correlation.md`.
+- **Legacy dashboard tables removed:** `cleanup_legacy_dashboard.sql`.
 
 ### Documentation
 
 | Document | Purpose |
 |----------|---------|
 | `docs/design/system_design.md` | Architecture, workflows, design decisions |
-| `docs/operations/web_app_handover.md` | Tables/views for frontend team |
+| `docs/operations/web_app_handover.md` | Silver contract for VPA |
+| `docs/operations/vpa_frontend_integration.md` | VPA ↔ ETL two-repo setup |
 | `docs/operations/testing_notes.md` | Smoke tests, ETL verification, known issues |
 | `docs/operations/product_review_checklist.md` | Rubric alignment for capstone review |
 | `docs/data_dictionary_baseline.md` | Column-level reference |
@@ -79,7 +81,8 @@ Snapshot for the team and client: what is working, how to run it, silver read mo
 
 | Area | Notes |
 |------|--------|
-| **Frontend website** | `frontend/` placeholder — consumes Supabase silver + `athlete_identity` (see `web_app_handover.md`). |
+| **VPA frontend** | Built in separate `vpa/` repo (React + FastAPI); consumes silver tables documented in `vpa_frontend_integration.md`. This repo’s `frontend/` remains unused. |
+| **VALD silver view** | VPA `/vald` may use staging tables until `silver_vald_*` is added. |
 | **RLS & API layer** | Tables unrestricted until RLS or backend API with service role. |
 | **WHOOP athlete onboarding** | Only roster athletes with `whoop_user_id` + completed OAuth receive data. |
 | **Catapult rate limits (429)** | Bulk export may need backoff/tuning under heavy CI runs. |

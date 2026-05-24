@@ -12,7 +12,7 @@ Maps the **Product Review** rubric to this repository. Use during viva prep: eac
 |-----------|--------|-----------------|
 | Individual Contribution | 40% | Per-person — fill in journal/backlog |
 | Technical Understanding | 40% | Prep from `system_design.md` + your modules |
-| Product Quality & Client Alignment | 40% | Data platform ✅; full product ⚠️ (website behind) |
+| Product Quality & Client Alignment | 40% | Data platform ✅; VPA app ✅ on silver; VALD silver optional |
 | Supporting Documentation | 20% | ✅ Improved in this commit |
 
 ---
@@ -58,7 +58,7 @@ Maps the **Product Review** rubric to this repository. Use during viva prep: eac
 | GymAware training data | ✅ | Extended export + silver |
 | WHOOP recovery/sleep/workout | ✅ | ETL + silver (needs per-athlete OAuth) |
 | VALD profiles / optional tests | ✅ | Upload scripts in pipeline |
-| Custom website (replacing Power BI) | ⚠️ | Data contract ready; UI in progress |
+| Custom website (VPA React + FastAPI) | ✅ | Reads `silver_*` via service key; see `vpa_frontend_integration.md` |
 | Unified athlete filter (name + date) | ✅ | Silver + `athlete_identity` |
 | Privacy / cohort scope | ✅ | `ROSTER_FILTER=1` |
 | Production security (RLS) | ❌ Optional | Documented; not implemented |
@@ -116,7 +116,7 @@ Maps the **Product Review** rubric to this repository. Use during viva prep: eac
 | Area | Complete? |
 |------|-----------|
 | **Data / ETL / Supabase silver (your scope)** | ✅ Yes for capstone data deliverable |
-| **Full end-user product (website)** | ⚠️ In progress — not a fail of data work if contract is documented |
+| **Full end-user product (VPA)** | ✅ Team app on silver; coordinate VALD page if staging-only |
 | **Documentation for rubric** | ✅ Yes after this update + git push |
 | **Optional (RLS, all athletes on WHOOP, Gold)** | ❌ Post-review / optional |
 
