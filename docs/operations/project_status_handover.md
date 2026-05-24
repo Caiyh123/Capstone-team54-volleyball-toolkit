@@ -82,7 +82,7 @@ Snapshot for the team and client: what is working, how to run it, silver read mo
 | Area | Notes |
 |------|--------|
 | **VPA frontend** | Built in separate `vpa/` repo (React + FastAPI); consumes silver tables documented in `vpa_frontend_integration.md`. This repo’s `frontend/` remains unused. |
-| **VALD silver view** | VPA `/vald` may use staging tables until `silver_vald_*` is added. |
+| **VPA `/vald` page** | Placeholder only in VPA; VALD ETL/staging exists in this repo; `silver_vald_*` not built. |
 | **RLS & API layer** | Tables unrestricted until RLS or backend API with service role. |
 | **WHOOP athlete onboarding** | Only roster athletes with `whoop_user_id` + completed OAuth receive data. |
 | **Catapult rate limits (429)** | Bulk export may need backoff/tuning under heavy CI runs. |

@@ -12,7 +12,7 @@ Maps the **Product Review** rubric to this repository. Use during viva prep: eac
 |-----------|--------|-----------------|
 | Individual Contribution | 40% | Per-person — fill in journal/backlog |
 | Technical Understanding | 40% | Prep from `system_design.md` + your modules |
-| Product Quality & Client Alignment | 40% | Data platform ✅; VPA app ✅ on silver; VALD silver optional |
+| Product Quality & Client Alignment | 40% | Data platform ✅; VPA ✅ on silver (Catapult/WHOOP/GymAware); `/vald` placeholder |
 | Supporting Documentation | 20% | ✅ Improved in this commit |
 
 ---
@@ -58,7 +58,7 @@ Maps the **Product Review** rubric to this repository. Use during viva prep: eac
 | GymAware training data | ✅ | Extended export + silver |
 | WHOOP recovery/sleep/workout | ✅ | ETL + silver (needs per-athlete OAuth) |
 | VALD profiles / optional tests | ✅ | Upload scripts in pipeline |
-| Custom website (VPA React + FastAPI) | ✅ | Reads `silver_*` via service key; see `vpa_frontend_integration.md` |
+| Custom website (VPA React + FastAPI) | ✅ | Live pages on silver; `/vald` is placeholder only |
 | Unified athlete filter (name + date) | ✅ | Silver + `athlete_identity` |
 | Privacy / cohort scope | ✅ | `ROSTER_FILTER=1` |
 | Production security (RLS) | ❌ Optional | Documented; not implemented |
@@ -116,7 +116,7 @@ Maps the **Product Review** rubric to this repository. Use during viva prep: eac
 | Area | Complete? |
 |------|-----------|
 | **Data / ETL / Supabase silver (your scope)** | ✅ Yes for capstone data deliverable |
-| **Full end-user product (VPA)** | ✅ Team app on silver; coordinate VALD page if staging-only |
+| **Full end-user product (VPA)** | ✅ Core sources on silver; VALD UI deferred (placeholder route) |
 | **Documentation for rubric** | ✅ Yes after this update + git push |
 | **Optional (RLS, all athletes on WHOOP, Gold)** | ❌ Post-review / optional |
 

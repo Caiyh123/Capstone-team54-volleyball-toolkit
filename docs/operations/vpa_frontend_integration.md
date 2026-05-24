@@ -63,14 +63,11 @@ flowchart LR
 
 If a chart is empty, verify (1) silver SQL applied, (2) ETL has run, (3) roster has vendor IDs for that athlete.
 
-## VALD page (gap note)
+## VALD page (placeholder)
 
-VPA exposes `/vald` but there is **no `silver_vald_*` view** in this toolkit yet. VALD data today lives in:
+VPA route **`/vald` is a UI placeholder only** — no live charts wired yet. Do not treat it as a delivered dashboard page for review.
 
-- `vald_profiles` (identity)
-- `vald_forceframe_tests_staging`, `vald_forcedecks_*_staging` (append-only activity)
-
-The VPA team may query staging/JSON directly or add a future `silver_vald_*` migration here. Coordinate before capstone review if the VALD page must show deduped metrics.
+**Data side (this repo) is separate and working:** nightly ETL can load `vald_profiles` and optional ForceFrame / ForceDecks staging tables. There is **no `silver_vald_*` view** yet. A future VALD page would need silver DDL here plus VPA router work.
 
 ## Optional silver not yet wired in VPA README
 

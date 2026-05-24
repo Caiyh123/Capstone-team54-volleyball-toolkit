@@ -34,7 +34,7 @@ Filter facts by **`athlete_internal_key`** + **`calendar_date`**.
 | `silver_catapult_session` | `/`, `/catapult` |
 | `silver_whoop_recovery`, `silver_whoop_sleep` | `/`, `/whoop` |
 | `silver_gymaware_summaries`, `silver_gymaware_bests` | `/gymaware` |
-| VALD (TBD) | `/vald` — likely staging until `silver_vald_*` exists |
+| VALD | `/vald` — **placeholder UI only**; ETL loads staging tables; no silver view yet |
 
 ## Additional silver (available, not in VPA README yet)
 
