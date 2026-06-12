@@ -1,0 +1,66 @@
+CREATE OR REPLACE VIEW public.bi_fact_athlete_daily_comparison AS
+WITH base AS (
+    SELECT
+        d.*,
+        LAG(primary_load_index) OVER (PARTITION BY athlete_key ORDER BY calendar_date) AS previous_day_load_index,
+        LAG(recovery_score) OVER (PARTITION BY athlete_key ORDER BY calendar_date) AS previous_day_recovery_score,
+        LAG(sleep_efficiency_percentage) OVER (PARTITION BY athlete_key ORDER BY calendar_date) AS previous_day_sleep_efficiency,
+        LAG(whoop_avg_cycle_strain) OVER (PARTITION BY athlete_key ORDER BY calendar_date) AS previous_day_whoop_strain,
+        AVG(primary_load_index) OVER (
+            PARTITION BY athlete_key ORDER BY calendar_date
+            ROWS BETWEEN 6 PRECEDING AND CURRENT ROW
+        ) AS load_index_7d_avg,
+        AVG(primary_load_index) OVER (
+            PARTITION BY athlete_key ORDER BY calendar_date
+            ROWS BETWEEN 27 PRECEDING AND 7 PRECEDING
+        ) AS load_index_28d_avg
+    FROM public.bi_fact_athlete_daily_dashboard d
+),
+calc AS (
+    SELECT
+        *,
+        primary_load_index - previous_day_load_index AS daily_load_index_change,
+        CASE
+            WHEN previous_day_load_index IS NULL OR previous_day_load_index = 0 THEN NULL
+            ELSE (primary_load_index - previous_day_load_index) / previous_day_load_index
+        END AS daily_load_index_change_pct,
+        recovery_score - previous_day_recovery_score AS daily_recovery_change,
+        sleep_efficiency_percentage - previous_day_sleep_efficiency AS daily_sleep_efficiency_change,
+        CASE
+            WHEN load_index_28d_avg IS NULL OR load_index_28d_avg = 0 THEN NULL
+            ELSE load_index_7d_avg / load_index_28d_avg
+        END AS acwr_load_index
+    FROM base
+),
+risk AS (
+    SELECT
+        *,
+        (
+            CASE WHEN recovery_score < 40 THEN 3 WHEN recovery_score < 67 THEN 1 ELSE 0 END +
+            CASE WHEN sleep_efficiency_percentage < 70 THEN 2 WHEN sleep_efficiency_percentage < 85 THEN 1 ELSE 0 END +
+            CASE WHEN whoop_avg_cycle_strain >= 14 THEN 1 ELSE 0 END +
+            CASE WHEN daily_load_index_change_pct >= 0.25 THEN 2 WHEN daily_load_index_change_pct >= 0.10 THEN 1 ELSE 0 END +
+            CASE WHEN acwr_load_index >= 1.50 THEN 2 WHEN acwr_load_index >= 1.20 THEN 1 ELSE 0 END +
+            CASE WHEN catapult_high_jump_count >= 20 THEN 1 ELSE 0 END +
+            CASE WHEN high_intensity_zone_hours >= 0.75 THEN 1 ELSE 0 END
+        ) AS readiness_risk_score
+    FROM calc
+)
+SELECT
+    *,
+    CASE
+        WHEN readiness_risk_score >= 6 THEN 'High Risk'
+        WHEN readiness_risk_score >= 3 THEN 'Medium Risk'
+        ELSE 'Low Risk'
+    END AS readiness_risk_level,
+    CASE
+        WHEN recovery_score < 40 THEN 'High Fatigue'
+        WHEN recovery_score < 67 OR sleep_efficiency_percentage < 70 THEN 'Moderate Fatigue'
+        ELSE 'Normal'
+    END AS fatigue_status,
+    CASE
+        WHEN readiness_risk_score >= 6 THEN 'Reduce load / review athlete'
+        WHEN readiness_risk_score >= 3 THEN 'Monitor next session'
+        ELSE 'Normal'
+    END AS recommended_action
+FROM risk;

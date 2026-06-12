@@ -1,0 +1,38 @@
+CREATE OR REPLACE VIEW public.bi_dim_date AS
+WITH all_dates AS (
+    SELECT calendar_date FROM public.silver_catapult_session WHERE calendar_date IS NOT NULL
+    UNION
+    SELECT calendar_date FROM public.silver_catapult_jump_session WHERE calendar_date IS NOT NULL
+    UNION
+    SELECT calendar_date FROM public.silver_gymaware_summaries WHERE calendar_date IS NOT NULL
+    UNION
+    SELECT calendar_date FROM public.silver_whoop_cycle WHERE calendar_date IS NOT NULL
+    UNION
+    SELECT calendar_date FROM public.silver_whoop_recovery WHERE calendar_date IS NOT NULL
+    UNION
+    SELECT calendar_date FROM public.silver_whoop_sleep WHERE calendar_date IS NOT NULL
+    UNION
+    SELECT calendar_date FROM public.silver_whoop_sleep_longest_per_day WHERE calendar_date IS NOT NULL
+    UNION
+    SELECT calendar_date FROM public.silver_whoop_workout WHERE calendar_date IS NOT NULL
+),
+bounds AS (
+    SELECT MIN(calendar_date) AS min_date, MAX(calendar_date) AS max_date FROM all_dates
+),
+series AS (
+    SELECT GENERATE_SERIES(min_date, max_date, INTERVAL '1 day')::date AS calendar_date
+    FROM bounds
+    WHERE min_date IS NOT NULL AND max_date IS NOT NULL
+)
+SELECT
+    calendar_date,
+    EXTRACT(YEAR FROM calendar_date)::int AS year,
+    EXTRACT(QUARTER FROM calendar_date)::int AS quarter,
+    EXTRACT(MONTH FROM calendar_date)::int AS month_number,
+    TO_CHAR(calendar_date, 'Mon') AS month_name,
+    DATE_TRUNC('week', calendar_date)::date AS week_start_date,
+    EXTRACT(WEEK FROM calendar_date)::int AS week_number,
+    EXTRACT(ISODOW FROM calendar_date)::int AS day_of_week_number,
+    TO_CHAR(calendar_date, 'Dy') AS day_name,
+    CASE WHEN EXTRACT(ISODOW FROM calendar_date) IN (6, 7) THEN TRUE ELSE FALSE END AS is_weekend
+FROM series;

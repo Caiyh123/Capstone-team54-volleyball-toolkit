@@ -1,0 +1,17 @@
+CREATE OR REPLACE VIEW public.bi_fact_whoop_cycle_daily AS
+SELECT
+    LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, whoop_user_id))) AS athlete_key,
+    COALESCE(athlete_display_name, athlete_internal_key, whoop_user_id) AS athlete_name,
+    calendar_date,
+    COUNT(DISTINCT cycle_id) AS whoop_cycle_count,
+    AVG(strain) AS whoop_avg_cycle_strain,
+    MAX(strain) AS whoop_max_cycle_strain,
+    SUM(kilojoule) AS whoop_cycle_kilojoule,
+    AVG(average_heart_rate) AS whoop_avg_heart_rate,
+    MAX(max_heart_rate) AS whoop_max_heart_rate
+FROM public.silver_whoop_cycle
+WHERE calendar_date IS NOT NULL
+GROUP BY
+    LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, whoop_user_id))),
+    COALESCE(athlete_display_name, athlete_internal_key, whoop_user_id),
+    calendar_date;

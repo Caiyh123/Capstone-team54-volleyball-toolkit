@@ -1,0 +1,40 @@
+CREATE OR REPLACE VIEW public.bi_fact_metric_long_daily AS
+SELECT athlete_key, athlete_name, calendar_date, 'Recovery Score'::text AS metric_name, 'Readiness'::text AS metric_group, recovery_score::numeric AS metric_value, recovery_zone AS metric_status
+FROM public.bi_fact_athlete_daily_dashboard
+UNION ALL
+SELECT athlete_key, athlete_name, calendar_date, 'HRV RMSSD'::text, 'Readiness'::text, hrv_rmssd_milli::numeric, NULL::text
+FROM public.bi_fact_athlete_daily_dashboard
+UNION ALL
+SELECT athlete_key, athlete_name, calendar_date, 'Resting Heart Rate'::text, 'Readiness'::text, resting_heart_rate::numeric, NULL::text
+FROM public.bi_fact_athlete_daily_dashboard
+UNION ALL
+SELECT athlete_key, athlete_name, calendar_date, 'Sleep Efficiency'::text, 'Sleep'::text, sleep_efficiency_percentage::numeric, sleep_efficiency_status
+FROM public.bi_fact_athlete_daily_dashboard
+UNION ALL
+SELECT athlete_key, athlete_name, calendar_date, 'Sleep Performance'::text, 'Sleep'::text, sleep_performance_percentage::numeric, NULL::text
+FROM public.bi_fact_athlete_daily_dashboard
+UNION ALL
+SELECT athlete_key, athlete_name, calendar_date, 'WHOOP Cycle Strain'::text, 'Load'::text, whoop_avg_cycle_strain::numeric, strain_status
+FROM public.bi_fact_athlete_daily_dashboard
+UNION ALL
+SELECT athlete_key, athlete_name, calendar_date, 'Catapult Player Load'::text, 'Load'::text, catapult_total_player_load::numeric, catapult_load_status
+FROM public.bi_fact_athlete_daily_dashboard
+UNION ALL
+SELECT athlete_key, athlete_name, calendar_date, 'Total Distance'::text, 'Load'::text, catapult_total_distance::numeric, NULL::text
+FROM public.bi_fact_athlete_daily_dashboard
+UNION ALL
+SELECT athlete_key, athlete_name, calendar_date, 'Max Velocity'::text, 'Speed'::text, catapult_max_velocity::numeric, NULL::text
+FROM public.bi_fact_athlete_daily_dashboard
+UNION ALL
+SELECT athlete_key, athlete_name, calendar_date, 'Jump Count'::text, 'Jump'::text, catapult_total_jumps::numeric, NULL::text
+FROM public.bi_fact_athlete_daily_dashboard
+UNION ALL
+SELECT athlete_key, athlete_name, calendar_date, 'High Jump Count'::text, 'Jump'::text, catapult_high_jump_count::numeric, NULL::text
+FROM public.bi_fact_athlete_daily_dashboard
+UNION ALL
+SELECT athlete_key, athlete_name, calendar_date, 'Peak Power'::text, 'Strength'::text, peak_power::numeric, NULL::text
+FROM public.bi_fact_athlete_daily_dashboard
+UNION ALL
+SELECT athlete_key, athlete_name, calendar_date, 'Total Reps'::text, 'Strength'::text, total_reps::numeric, NULL::text
+FROM public.bi_fact_athlete_daily_dashboard;
+

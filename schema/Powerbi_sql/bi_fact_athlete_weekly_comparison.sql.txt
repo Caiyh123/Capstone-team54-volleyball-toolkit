@@ -1,0 +1,41 @@
+CREATE OR REPLACE VIEW public.bi_fact_athlete_weekly_comparison AS
+WITH weekly AS (
+    SELECT
+        athlete_key,
+        athlete_name,
+        DATE_TRUNC('week', calendar_date)::date AS week_start_date,
+        COUNT(DISTINCT calendar_date) AS active_days,
+        AVG(recovery_score) AS weekly_avg_recovery_score,
+        AVG(sleep_efficiency_percentage) AS weekly_avg_sleep_efficiency,
+        AVG(whoop_avg_cycle_strain) AS weekly_avg_whoop_cycle_strain,
+        SUM(whoop_workout_total_strain) AS weekly_whoop_workout_strain,
+        SUM(catapult_total_player_load) AS weekly_catapult_player_load,
+        AVG(primary_load_index) AS weekly_avg_load_index,
+        SUM(catapult_total_jumps) AS weekly_jump_count,
+        SUM(catapult_high_jump_count) AS weekly_high_jump_count,
+        SUM(total_reps) AS weekly_strength_reps,
+        MAX(peak_power) AS weekly_peak_power,
+        AVG(readiness_risk_score) AS weekly_avg_readiness_risk_score
+    FROM public.bi_fact_athlete_daily_comparison
+    GROUP BY athlete_key, athlete_name, DATE_TRUNC('week', calendar_date)::date
+),
+comparison AS (
+    SELECT
+        *,
+        LAG(weekly_avg_recovery_score) OVER (PARTITION BY athlete_key ORDER BY week_start_date) AS previous_week_recovery_score,
+        LAG(weekly_avg_sleep_efficiency) OVER (PARTITION BY athlete_key ORDER BY week_start_date) AS previous_week_sleep_efficiency,
+        LAG(weekly_avg_load_index) OVER (PARTITION BY athlete_key ORDER BY week_start_date) AS previous_week_avg_load_index,
+        LAG(weekly_catapult_player_load) OVER (PARTITION BY athlete_key ORDER BY week_start_date) AS previous_week_catapult_player_load
+    FROM weekly
+)
+SELECT
+    *,
+    weekly_avg_recovery_score - previous_week_recovery_score AS weekly_recovery_change,
+    weekly_avg_sleep_efficiency - previous_week_sleep_efficiency AS weekly_sleep_efficiency_change,
+    weekly_avg_load_index - previous_week_avg_load_index AS weekly_load_index_change,
+    CASE
+        WHEN previous_week_avg_load_index IS NULL OR previous_week_avg_load_index = 0 THEN NULL
+        ELSE (weekly_avg_load_index - previous_week_avg_load_index) / previous_week_avg_load_index
+    END AS weekly_load_index_change_pct,
+    weekly_catapult_player_load - previous_week_catapult_player_load AS weekly_catapult_load_change
+FROM comparison;

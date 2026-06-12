@@ -1,0 +1,18 @@
+CREATE OR REPLACE VIEW public.bi_fact_catapult_jump_daily AS
+SELECT
+    LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, athlete_jersey, athlete_id::text))) AS athlete_key,
+    COALESCE(athlete_display_name, athlete_internal_key, athlete_jersey, athlete_id::text) AS athlete_name,
+    calendar_date,
+    COUNT(DISTINCT activity_id) AS jump_session_count,
+    SUM(jump_event_count) AS jump_event_count,
+    SUM(high_jump_event_count) AS high_jump_event_count,
+    MAX(max_jump_attribute_cs) AS max_jump_attribute_cs,
+    MAX(max_jump_flight_time_s) AS max_jump_flight_time_s,
+    MAX(max_jump_height_cm) AS max_jump_height_cm,
+    MAX(high_jump_min_cs) AS high_jump_min_cs
+FROM public.silver_catapult_jump_session
+WHERE calendar_date IS NOT NULL
+GROUP BY
+    LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, athlete_jersey, athlete_id::text))),
+    COALESCE(athlete_display_name, athlete_internal_key, athlete_jersey, athlete_id::text),
+    calendar_date;

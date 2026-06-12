@@ -1,0 +1,20 @@
+CREATE OR REPLACE VIEW public.bi_fact_whoop_recovery_daily AS
+SELECT
+    LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, whoop_user_id))) AS athlete_key,
+    COALESCE(athlete_display_name, athlete_internal_key, whoop_user_id) AS athlete_name,
+    calendar_date,
+    COUNT(DISTINCT cycle_id) AS recovery_record_count,
+    AVG(recovery_score) AS recovery_score,
+    AVG(resting_heart_rate) AS resting_heart_rate,
+    AVG(hrv_rmssd_milli) AS hrv_rmssd_milli,
+    AVG(spo2_percentage) AS spo2_percentage,
+    AVG(skin_temp_celsius) AS skin_temp_celsius,
+    AVG(cycle_strain) AS recovery_cycle_strain,
+    SUM(cycle_kilojoule) AS recovery_cycle_kilojoule,
+    BOOL_OR(user_calibrating) AS user_calibrating
+FROM public.silver_whoop_recovery
+WHERE calendar_date IS NOT NULL
+GROUP BY
+    LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, whoop_user_id))),
+    COALESCE(athlete_display_name, athlete_internal_key, whoop_user_id),
+    calendar_date;

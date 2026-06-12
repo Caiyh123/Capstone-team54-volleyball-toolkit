@@ -1,0 +1,28 @@
+CREATE OR REPLACE VIEW public.bi_fact_gymaware_strength_daily AS
+SELECT
+    LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, athlete_name, athlete_reference))) AS athlete_key,
+    COALESCE(athlete_display_name, athlete_name, athlete_internal_key, athlete_reference) AS athlete_name,
+    calendar_date,
+    COUNT(DISTINCT gymaware_reference) AS gymaware_session_count,
+    COUNT(DISTINCT exercise_name) AS exercise_count,
+    STRING_AGG(DISTINCT exercise_name, ', ') AS exercise_names,
+    SUM(rep_count) AS total_reps,
+    AVG(athlete_weight) AS avg_athlete_weight,
+    AVG(bar_weight) AS avg_bar_weight,
+    MAX(bar_weight) AS max_bar_weight,
+    AVG(height) AS avg_lift_height,
+    MAX(height) AS max_lift_height,
+    AVG(dip) AS avg_dip,
+    AVG(mean_velocity) AS avg_mean_velocity,
+    MAX(peak_velocity) AS peak_velocity,
+    AVG(mean_power) AS avg_mean_power,
+    MAX(peak_power) AS peak_power,
+    AVG(mean_watts_per_kg) AS avg_mean_watts_per_kg,
+    MAX(peak_watts_per_kg) AS peak_watts_per_kg
+FROM public.silver_gymaware_summaries
+WHERE calendar_date IS NOT NULL
+  AND COALESCE(deleted, FALSE) = FALSE
+GROUP BY
+    LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, athlete_name, athlete_reference))),
+    COALESCE(athlete_display_name, athlete_name, athlete_internal_key, athlete_reference),
+    calendar_date;

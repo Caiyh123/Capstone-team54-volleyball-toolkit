@@ -1,0 +1,92 @@
+CREATE OR REPLACE VIEW public.bi_dim_athlete AS
+WITH src AS (
+    SELECT DISTINCT
+        LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, athlete_jersey, athlete_id::text))) AS athlete_key,
+        COALESCE(athlete_display_name, athlete_internal_key, athlete_jersey, athlete_id::text) AS athlete_name,
+        athlete_display_name,
+        athlete_internal_key,
+        athlete_jersey,
+        team_name,
+        NULL::text AS position,
+        'Catapult'::text AS source_system,
+        1 AS source_priority
+    FROM public.silver_catapult_session
+    WHERE COALESCE(athlete_internal_key, athlete_display_name, athlete_jersey, athlete_id::text) IS NOT NULL
+    UNION ALL
+    SELECT DISTINCT
+        LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, gymaware_display_name, CONCAT_WS(' ', first_name, last_name), athlete_reference))) AS athlete_key,
+        COALESCE(athlete_display_name, gymaware_display_name, CONCAT_WS(' ', first_name, last_name), athlete_reference) AS athlete_name,
+        athlete_display_name,
+        athlete_internal_key,
+        jersey_number AS athlete_jersey,
+        sport AS team_name,
+        position,
+        'GymAware'::text AS source_system,
+        2 AS source_priority
+    FROM public.silver_gymaware_athletes
+    WHERE COALESCE(athlete_internal_key, athlete_display_name, gymaware_display_name, CONCAT_WS(' ', first_name, last_name), athlete_reference) IS NOT NULL
+    UNION ALL
+    SELECT DISTINCT
+        LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, whoop_user_id))) AS athlete_key,
+        COALESCE(athlete_display_name, athlete_internal_key, whoop_user_id) AS athlete_name,
+        athlete_display_name,
+        athlete_internal_key,
+        NULL::text AS athlete_jersey,
+        NULL::text AS team_name,
+        NULL::text AS position,
+        'WHOOP'::text AS source_system,
+        3 AS source_priority
+    FROM public.silver_whoop_cycle
+    WHERE COALESCE(athlete_internal_key, athlete_display_name, whoop_user_id) IS NOT NULL
+    UNION ALL
+    SELECT DISTINCT
+        LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, whoop_user_id))) AS athlete_key,
+        COALESCE(athlete_display_name, athlete_internal_key, whoop_user_id) AS athlete_name,
+        athlete_display_name,
+        athlete_internal_key,
+        NULL::text AS athlete_jersey,
+        NULL::text AS team_name,
+        NULL::text AS position,
+        'WHOOP'::text AS source_system,
+        4 AS source_priority
+    FROM public.silver_whoop_recovery
+    WHERE COALESCE(athlete_internal_key, athlete_display_name, whoop_user_id) IS NOT NULL
+    UNION ALL
+    SELECT DISTINCT
+        LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, whoop_user_id))) AS athlete_key,
+        COALESCE(athlete_display_name, athlete_internal_key, whoop_user_id) AS athlete_name,
+        athlete_display_name,
+        athlete_internal_key,
+        NULL::text AS athlete_jersey,
+        NULL::text AS team_name,
+        NULL::text AS position,
+        'WHOOP'::text AS source_system,
+        5 AS source_priority
+    FROM public.silver_whoop_sleep
+    WHERE COALESCE(athlete_internal_key, athlete_display_name, whoop_user_id) IS NOT NULL
+    UNION ALL
+    SELECT DISTINCT
+        LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, whoop_user_id))) AS athlete_key,
+        COALESCE(athlete_display_name, athlete_internal_key, whoop_user_id) AS athlete_name,
+        athlete_display_name,
+        athlete_internal_key,
+        NULL::text AS athlete_jersey,
+        NULL::text AS team_name,
+        NULL::text AS position,
+        'WHOOP'::text AS source_system,
+        6 AS source_priority
+    FROM public.silver_whoop_workout
+    WHERE COALESCE(athlete_internal_key, athlete_display_name, whoop_user_id) IS NOT NULL
+)
+SELECT DISTINCT ON (athlete_key)
+    athlete_key,
+    athlete_name,
+    athlete_display_name,
+    athlete_internal_key,
+    athlete_jersey,
+    team_name,
+    position,
+    source_system
+FROM src
+WHERE athlete_key IS NOT NULL AND athlete_key <> ''
+ORDER BY athlete_key, source_priority;

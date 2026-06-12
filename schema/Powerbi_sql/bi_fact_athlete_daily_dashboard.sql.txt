@@ -1,0 +1,153 @@
+CREATE OR REPLACE VIEW public.bi_fact_athlete_daily_dashboard AS
+WITH athlete_dates AS (
+    SELECT athlete_key, calendar_date FROM public.bi_fact_catapult_daily
+    UNION
+    SELECT athlete_key, calendar_date FROM public.bi_fact_catapult_jump_daily
+    UNION
+    SELECT athlete_key, calendar_date FROM public.bi_fact_whoop_cycle_daily
+    UNION
+    SELECT athlete_key, calendar_date FROM public.bi_fact_whoop_recovery_daily
+    UNION
+    SELECT athlete_key, calendar_date FROM public.bi_fact_whoop_sleep_daily
+    UNION
+    SELECT athlete_key, calendar_date FROM public.bi_fact_whoop_workout_daily
+    UNION
+    SELECT athlete_key, calendar_date FROM public.bi_fact_gymaware_strength_daily
+)
+SELECT
+    ad.athlete_key,
+    COALESCE(a.athlete_name, c.athlete_name, r.athlete_name, s.athlete_name, wc.athlete_name, ww.athlete_name, g.athlete_name) AS athlete_name,
+    ad.calendar_date,
+
+    -- WHOOP recovery/readiness
+    r.recovery_score,
+    r.resting_heart_rate,
+    r.hrv_rmssd_milli,
+    r.spo2_percentage,
+    r.skin_temp_celsius,
+    r.user_calibrating,
+
+    -- WHOOP sleep
+    s.sleep_in_bed_hours,
+    s.sleep_performance_percentage,
+    s.sleep_efficiency_percentage,
+    s.sleep_consistency_percentage,
+    s.rem_sleep_hours,
+    s.slow_wave_sleep_hours,
+    s.light_sleep_hours,
+    s.awake_hours,
+    s.disturbance_count,
+    s.respiratory_rate,
+    s.sleep_debt_hours,
+    s.sleep_needed_from_recent_strain_hours,
+
+    -- WHOOP load / strain
+    wc.whoop_avg_cycle_strain,
+    wc.whoop_max_cycle_strain,
+    wc.whoop_cycle_kilojoule,
+    wc.whoop_avg_heart_rate,
+    wc.whoop_max_heart_rate,
+    ww.workout_count,
+    ww.sport_names,
+    ww.whoop_workout_total_strain,
+    ww.whoop_workout_avg_strain,
+    ww.whoop_workout_kilojoule,
+    ww.workout_distance_meter,
+    ww.high_intensity_zone_hours,
+    ww.zone_zero_hours,
+    ww.zone_one_hours,
+    ww.zone_two_hours,
+    ww.zone_three_hours,
+    ww.zone_four_hours,
+    ww.zone_five_hours,
+
+    -- Catapult load / speed / jump
+    c.catapult_session_count,
+    c.catapult_activity_names,
+    c.catapult_total_player_load,
+    c.catapult_avg_player_load_per_minute,
+    c.catapult_peak_player_load,
+    c.catapult_total_distance,
+    c.catapult_max_velocity,
+    c.athlete_max_velocity,
+    c.catapult_avg_percentage_max_velocity,
+    c.catapult_max_heart_rate,
+    c.catapult_avg_percentage_avg_heart_rate,
+    c.catapult_total_jumps,
+    c.catapult_high_jump_count,
+    GREATEST(c.catapult_max_jump_height_cm, j.max_jump_height_cm) AS max_jump_height_cm,
+
+    -- GymAware strength / power
+    g.gymaware_session_count,
+    g.exercise_count,
+    g.exercise_names,
+    g.total_reps,
+    g.avg_bar_weight,
+    g.max_bar_weight,
+    g.avg_mean_velocity,
+    g.peak_velocity,
+    g.avg_mean_power,
+    g.peak_power,
+    g.avg_mean_watts_per_kg,
+    g.peak_watts_per_kg,
+
+    -- Status flags
+    CASE
+        WHEN r.recovery_score IS NULL THEN 'No Recovery Data'
+        WHEN r.recovery_score < 40 THEN 'Red'
+        WHEN r.recovery_score < 67 THEN 'Yellow'
+        ELSE 'Green'
+    END AS recovery_zone,
+
+    CASE
+        WHEN s.sleep_efficiency_percentage IS NULL THEN 'No Sleep Data'
+        WHEN s.sleep_efficiency_percentage < 70 THEN 'Poor'
+        WHEN s.sleep_efficiency_percentage < 85 THEN 'Moderate'
+        ELSE 'Good'
+    END AS sleep_efficiency_status,
+
+    CASE
+        WHEN COALESCE(wc.whoop_avg_cycle_strain, ww.whoop_workout_total_strain) IS NULL THEN 'No Strain Data'
+        WHEN COALESCE(wc.whoop_avg_cycle_strain, ww.whoop_workout_total_strain) >= 14 THEN 'High Strain'
+        WHEN COALESCE(wc.whoop_avg_cycle_strain, ww.whoop_workout_total_strain) >= 10 THEN 'Medium Strain'
+        ELSE 'Low Strain'
+    END AS strain_status,
+
+    CASE
+        WHEN c.catapult_total_player_load IS NULL THEN 'No Catapult Load'
+        WHEN c.catapult_total_player_load >= 800 THEN 'High Load'
+        WHEN c.catapult_total_player_load >= 500 THEN 'Medium Load'
+        ELSE 'Low Load'
+    END AS catapult_load_status,
+
+    -- A single load index for trend/risk. This is not a raw unit; it is for internal BI comparison.
+    COALESCE(
+        c.catapult_total_player_load,
+        wc.whoop_avg_cycle_strain * 100,
+        ww.whoop_workout_total_strain * 100
+    ) AS primary_load_index,
+
+    CASE
+        WHEN c.catapult_total_player_load IS NOT NULL THEN 'Catapult Player Load'
+        WHEN wc.whoop_avg_cycle_strain IS NOT NULL THEN 'WHOOP Cycle Strain x100'
+        WHEN ww.whoop_workout_total_strain IS NOT NULL THEN 'WHOOP Workout Strain x100'
+        ELSE 'No Load Source'
+    END AS primary_load_source
+
+FROM athlete_dates ad
+LEFT JOIN public.bi_dim_athlete a
+    ON ad.athlete_key = a.athlete_key
+LEFT JOIN public.bi_fact_catapult_daily c
+    ON ad.athlete_key = c.athlete_key AND ad.calendar_date = c.calendar_date
+LEFT JOIN public.bi_fact_catapult_jump_daily j
+    ON ad.athlete_key = j.athlete_key AND ad.calendar_date = j.calendar_date
+LEFT JOIN public.bi_fact_whoop_cycle_daily wc
+    ON ad.athlete_key = wc.athlete_key AND ad.calendar_date = wc.calendar_date
+LEFT JOIN public.bi_fact_whoop_recovery_daily r
+    ON ad.athlete_key = r.athlete_key AND ad.calendar_date = r.calendar_date
+LEFT JOIN public.bi_fact_whoop_sleep_daily s
+    ON ad.athlete_key = s.athlete_key AND ad.calendar_date = s.calendar_date
+LEFT JOIN public.bi_fact_whoop_workout_daily ww
+    ON ad.athlete_key = ww.athlete_key AND ad.calendar_date = ww.calendar_date
+LEFT JOIN public.bi_fact_gymaware_strength_daily g
+    ON ad.athlete_key = g.athlete_key AND ad.calendar_date = g.calendar_date;

@@ -1,0 +1,35 @@
+CREATE OR REPLACE VIEW public.bi_fact_catapult_daily AS
+SELECT
+    LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, athlete_jersey, athlete_id::text))) AS athlete_key,
+    COALESCE(athlete_display_name, athlete_internal_key, athlete_jersey, athlete_id::text) AS athlete_name,
+    calendar_date,
+    COUNT(DISTINCT activity_id) AS catapult_session_count,
+    STRING_AGG(DISTINCT activity_name, ', ') AS catapult_activity_names,
+
+    SUM(total_player_load) AS catapult_total_player_load,
+    AVG(player_load_per_minute) AS catapult_avg_player_load_per_minute,
+    MAX(peak_player_load) AS catapult_peak_player_load,
+    SUM(total_2d_player_load) AS catapult_total_2d_player_load,
+    SUM(total_distance) AS catapult_total_distance,
+
+    MAX(max_vel) AS catapult_max_velocity,
+    MAX(athlete_max_velocity) AS athlete_max_velocity,
+    AVG(percentage_max_velocity) AS catapult_avg_percentage_max_velocity,
+
+    MAX(max_heart_rate) AS catapult_max_heart_rate,
+    AVG(percentage_avg_heart_rate) AS catapult_avg_percentage_avg_heart_rate,
+    AVG(percentage_max_heart_rate) AS catapult_avg_percentage_max_heart_rate,
+
+    SUM(COALESCE(total_jumps, indoor_analytics_total_jump_count, jump_event_count, 0)) AS catapult_total_jumps,
+    SUM(COALESCE(high_jump_count_ima_bands_6_8, high_jump_event_count, 0)) AS catapult_high_jump_count,
+    MAX(max_jump_height_cm) AS catapult_max_jump_height_cm,
+    MAX(max_jump_flight_time_s) AS catapult_max_jump_flight_time_s,
+
+    SUM(field_time) AS catapult_total_field_time,
+    SUM(duration) AS catapult_total_duration
+FROM public.silver_catapult_session
+WHERE calendar_date IS NOT NULL
+GROUP BY
+    LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, athlete_jersey, athlete_id::text))),
+    COALESCE(athlete_display_name, athlete_internal_key, athlete_jersey, athlete_id::text),
+    calendar_date;

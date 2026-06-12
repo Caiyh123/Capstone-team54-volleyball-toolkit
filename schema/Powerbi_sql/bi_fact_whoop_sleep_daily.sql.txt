@@ -1,0 +1,62 @@
+CREATE OR REPLACE VIEW public.bi_fact_whoop_sleep_daily AS
+WITH longest AS (
+    SELECT
+        LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, whoop_user_id))) AS athlete_key,
+        COALESCE(athlete_display_name, athlete_internal_key, whoop_user_id) AS athlete_name,
+        calendar_date,
+        MAX(total_in_bed_time_milli) / 3600000.0 AS sleep_in_bed_hours,
+        AVG(sleep_performance_percentage) AS sleep_performance_percentage,
+        AVG(sleep_efficiency_percentage) AS sleep_efficiency_percentage,
+        MAX(total_rem_sleep_time_milli) / 3600000.0 AS rem_sleep_hours,
+        MAX(total_slow_wave_sleep_time_milli) / 3600000.0 AS slow_wave_sleep_hours,
+        MAX(total_light_sleep_time_milli) / 3600000.0 AS light_sleep_hours
+    FROM public.silver_whoop_sleep_longest_per_day
+    WHERE calendar_date IS NOT NULL
+    GROUP BY
+        LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, whoop_user_id))),
+        COALESCE(athlete_display_name, athlete_internal_key, whoop_user_id),
+        calendar_date
+),
+all_sleep AS (
+    SELECT
+        LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, whoop_user_id))) AS athlete_key,
+        COALESCE(athlete_display_name, athlete_internal_key, whoop_user_id) AS athlete_name,
+        calendar_date,
+        AVG(respiratory_rate) AS respiratory_rate,
+        AVG(sleep_consistency_percentage) AS sleep_consistency_percentage,
+        SUM(disturbance_count) AS disturbance_count,
+        AVG(sleep_cycle_count) AS sleep_cycle_count,
+        SUM(total_awake_time_milli) / 3600000.0 AS awake_hours,
+        SUM(sleep_needed_baseline_milli) / 3600000.0 AS sleep_needed_baseline_hours,
+        SUM(sleep_needed_from_sleep_debt_milli) / 3600000.0 AS sleep_debt_hours,
+        SUM(sleep_needed_from_recent_strain_milli) / 3600000.0 AS sleep_needed_from_recent_strain_hours
+    FROM public.silver_whoop_sleep
+    WHERE calendar_date IS NOT NULL
+      AND COALESCE(nap, FALSE) = FALSE
+    GROUP BY
+        LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, whoop_user_id))),
+        COALESCE(athlete_display_name, athlete_internal_key, whoop_user_id),
+        calendar_date
+)
+SELECT
+    COALESCE(l.athlete_key, a.athlete_key) AS athlete_key,
+    COALESCE(l.athlete_name, a.athlete_name) AS athlete_name,
+    COALESCE(l.calendar_date, a.calendar_date) AS calendar_date,
+    l.sleep_in_bed_hours,
+    l.sleep_performance_percentage,
+    l.sleep_efficiency_percentage,
+    l.rem_sleep_hours,
+    l.slow_wave_sleep_hours,
+    l.light_sleep_hours,
+    a.respiratory_rate,
+    a.sleep_consistency_percentage,
+    a.disturbance_count,
+    a.sleep_cycle_count,
+    a.awake_hours,
+    a.sleep_needed_baseline_hours,
+    a.sleep_debt_hours,
+    a.sleep_needed_from_recent_strain_hours
+FROM longest l
+FULL OUTER JOIN all_sleep a
+    ON l.athlete_key = a.athlete_key
+   AND l.calendar_date = a.calendar_date;

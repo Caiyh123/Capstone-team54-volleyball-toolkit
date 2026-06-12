@@ -1,0 +1,23 @@
+CREATE OR REPLACE VIEW public.bi_team_daily_summary AS
+SELECT
+    calendar_date,
+    COUNT(DISTINCT athlete_key) AS active_athletes,
+    AVG(recovery_score) AS avg_recovery_score,
+    AVG(sleep_efficiency_percentage) AS avg_sleep_efficiency,
+    AVG(sleep_performance_percentage) AS avg_sleep_performance,
+    AVG(hrv_rmssd_milli) AS avg_hrv_rmssd_milli,
+    AVG(resting_heart_rate) AS avg_resting_heart_rate,
+    AVG(whoop_avg_cycle_strain) AS avg_whoop_cycle_strain,
+    SUM(whoop_workout_total_strain) AS team_whoop_workout_strain,
+    SUM(catapult_total_player_load) AS team_catapult_player_load,
+    SUM(catapult_total_distance) AS team_catapult_distance,
+    SUM(catapult_total_jumps) AS team_jump_count,
+    SUM(catapult_high_jump_count) AS team_high_jump_count,
+    AVG(readiness_risk_score) AS avg_readiness_risk_score,
+    COUNT(*) FILTER (WHERE readiness_risk_level = 'High Risk') AS high_risk_athletes,
+    COUNT(*) FILTER (WHERE readiness_risk_level = 'Medium Risk') AS medium_risk_athletes,
+    COUNT(*) FILTER (WHERE readiness_risk_level = 'Low Risk') AS low_risk_athletes,
+    COUNT(*) FILTER (WHERE fatigue_status = 'High Fatigue') AS high_fatigue_athletes,
+    COUNT(*) FILTER (WHERE fatigue_status = 'Moderate Fatigue') AS moderate_fatigue_athletes
+FROM public.bi_fact_athlete_daily_comparison
+GROUP BY calendar_date;

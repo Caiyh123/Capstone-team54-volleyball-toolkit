@@ -1,0 +1,21 @@
+CREATE OR REPLACE VIEW public.bi_fact_gymaware_strength_bests AS
+SELECT
+    LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, athlete_name, athlete_reference))) AS athlete_key,
+    COALESCE(athlete_display_name, athlete_name, athlete_internal_key, athlete_reference) AS athlete_name,
+    athlete_reference,
+    exercise_name,
+    MAX(bar_weight) AS best_bar_weight,
+    MAX(height) AS best_height,
+    MAX(dip) AS best_dip,
+    MAX(mean_velocity) AS best_mean_velocity,
+    MAX(peak_velocity) AS best_peak_velocity,
+    MAX(mean_power) AS best_mean_power,
+    MAX(peak_power) AS best_peak_power,
+    MAX(mean_watts_per_kg) AS best_mean_watts_per_kg,
+    MAX(peak_watts_per_kg) AS best_peak_watts_per_kg
+FROM public.silver_gymaware_bests
+GROUP BY
+    LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, athlete_name, athlete_reference))),
+    COALESCE(athlete_display_name, athlete_name, athlete_internal_key, athlete_reference),
+    athlete_reference,
+    exercise_name;

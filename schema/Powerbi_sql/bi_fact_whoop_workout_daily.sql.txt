@@ -1,0 +1,30 @@
+CREATE OR REPLACE VIEW public.bi_fact_whoop_workout_daily AS
+SELECT
+    LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, whoop_user_id))) AS athlete_key,
+    COALESCE(athlete_display_name, athlete_internal_key, whoop_user_id) AS athlete_name,
+    calendar_date,
+    COUNT(DISTINCT workout_id) AS workout_count,
+    STRING_AGG(DISTINCT sport_name, ', ') AS sport_names,
+    SUM(strain) AS whoop_workout_total_strain,
+    AVG(strain) AS whoop_workout_avg_strain,
+    MAX(strain) AS whoop_workout_max_strain,
+    SUM(kilojoule) AS whoop_workout_kilojoule,
+    AVG(average_heart_rate) AS workout_avg_heart_rate,
+    MAX(max_heart_rate) AS workout_max_heart_rate,
+    AVG(percent_recorded) AS workout_avg_percent_recorded,
+    SUM(distance_meter) AS workout_distance_meter,
+    SUM(altitude_gain_meter) AS workout_altitude_gain_meter,
+
+    SUM(zone_zero_milli) / 3600000.0 AS zone_zero_hours,
+    SUM(zone_one_milli) / 3600000.0 AS zone_one_hours,
+    SUM(zone_two_milli) / 3600000.0 AS zone_two_hours,
+    SUM(zone_three_milli) / 3600000.0 AS zone_three_hours,
+    SUM(zone_four_milli) / 3600000.0 AS zone_four_hours,
+    SUM(zone_five_milli) / 3600000.0 AS zone_five_hours,
+    SUM(COALESCE(zone_four_milli,0) + COALESCE(zone_five_milli,0)) / 3600000.0 AS high_intensity_zone_hours
+FROM public.silver_whoop_workout
+WHERE calendar_date IS NOT NULL
+GROUP BY
+    LOWER(TRIM(COALESCE(athlete_internal_key, athlete_display_name, whoop_user_id))),
+    COALESCE(athlete_display_name, athlete_internal_key, whoop_user_id),
+    calendar_date;
